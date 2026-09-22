@@ -1,0 +1,105 @@
+export interface FlagInfo {
+  id: string;
+  name: string;
+  path: string;
+  category: 'major' | 'minor' | 'variant' | 'event';
+}
+
+export const FLAGS: FlagInfo[] = [
+  // Major Nations (Official In-Game Waving Tooltip Flags)
+  { id: 'britain', name: 'Britain', path: 'assets/game/flags/country_britain.avif', category: 'major' },
+  { id: 'china', name: 'China', path: 'assets/game/flags/country_china.avif', category: 'major' },
+  { id: 'france', name: 'France', path: 'assets/game/flags/country_france.avif', category: 'major' },
+  { id: 'germany', name: 'Germany', path: 'assets/game/flags/country_germany.avif', category: 'major' },
+  { id: 'israel', name: 'Israel', path: 'assets/game/flags/country_israel.avif', category: 'major' },
+  { id: 'italy', name: 'Italy', path: 'assets/game/flags/country_italy.avif', category: 'major' },
+  { id: 'japan', name: 'Japan', path: 'assets/game/flags/country_japan.avif', category: 'major' },
+  { id: 'sweden', name: 'Sweden', path: 'assets/game/flags/country_sweden.avif', category: 'major' },
+  { id: 'usa', name: 'USA', path: 'assets/game/flags/country_usa.avif', category: 'major' },
+  { id: 'ussr', name: 'USSR', path: 'assets/game/flags/country_ussr.avif', category: 'major' },
+  // Variants & Sub-Branches (Official Game Flags)
+  { id: 'britain_empire_navy', name: 'Britain Empire Navy', path: 'assets/game/flags/country_britain_empire_navy.avif', category: 'variant' },
+  { id: 'canada_modern', name: 'Canada Modern', path: 'assets/game/flags/country_canada_modern.avif', category: 'variant' },
+  { id: 'germany_empire', name: 'Germany Empire', path: 'assets/game/flags/country_germany_empire.avif', category: 'variant' },
+  { id: 'germany_empire_navy', name: 'Germany Empire Navy', path: 'assets/game/flags/country_germany_empire_navy.avif', category: 'variant' },
+  { id: 'germany_modern', name: 'Germany Modern', path: 'assets/game/flags/country_germany_modern.avif', category: 'variant' },
+  { id: 'germany_weimar_republic', name: 'Germany Weimar Republic', path: 'assets/game/flags/country_germany_weimar_republic.avif', category: 'variant' },
+  { id: 'greece_early', name: 'Greece Early', path: 'assets/game/flags/country_greece_early.avif', category: 'variant' },
+  { id: 'greece_modern', name: 'Greece Modern', path: 'assets/game/flags/country_greece_modern.avif', category: 'variant' },
+  { id: 'hungary_modern', name: 'Hungary Modern', path: 'assets/game/flags/country_hungary_modern.avif', category: 'variant' },
+  { id: 'iraq_1963_1991', name: 'Iraq 1963 1991', path: 'assets/game/flags/country_iraq_1963_1991.avif', category: 'variant' },
+  { id: 'italy_modern', name: 'Italy Modern', path: 'assets/game/flags/country_italy_modern.avif', category: 'variant' },
+  { id: 'republic_china', name: 'Republic China', path: 'assets/game/flags/country_republic_china.avif', category: 'variant' },
+  { id: 'russia_empire', name: 'Russia Empire', path: 'assets/game/flags/country_russia_empire.avif', category: 'variant' },
+  { id: 'russia_empire_navy', name: 'Russia Empire Navy', path: 'assets/game/flags/country_russia_empire_navy.avif', category: 'variant' },
+  { id: 'south_africa_modern', name: 'South Africa Modern', path: 'assets/game/flags/country_south_africa_modern.avif', category: 'variant' },
+  { id: 'south_vietnam_navy', name: 'South Vietnam Navy', path: 'assets/game/flags/country_south_vietnam_navy.avif', category: 'variant' },
+  { id: 'usa_modern', name: 'Usa Modern', path: 'assets/game/flags/country_usa_modern.avif', category: 'variant' },
+  // Other Nations & Coalitions (Official Game Flags)
+  { id: 'arachis_bull', name: 'Arachis Bull', path: 'assets/game/flags/country_arachis_bull.avif', category: 'minor' },
+  { id: 'arachis_hawk', name: 'Arachis Hawk', path: 'assets/game/flags/country_arachis_hawk.avif', category: 'minor' },
+  { id: 'argentina', name: 'Argentina', path: 'assets/game/flags/country_argentina.avif', category: 'minor' },
+  { id: 'australia', name: 'Australia', path: 'assets/game/flags/country_australia.avif', category: 'minor' },
+  { id: 'austria', name: 'Austria', path: 'assets/game/flags/country_austria.avif', category: 'minor' },
+  { id: 'bangladesh', name: 'Bangladesh', path: 'assets/game/flags/country_bangladesh.avif', category: 'minor' },
+  { id: 'belgium', name: 'Belgium', path: 'assets/game/flags/country_belgium.avif', category: 'minor' },
+  { id: 'brazil', name: 'Brazil', path: 'assets/game/flags/country_brazil.avif', category: 'minor' },
+  { id: 'bulgaria', name: 'Bulgaria', path: 'assets/game/flags/country_bulgaria.avif', category: 'minor' },
+  { id: 'canada', name: 'Canada', path: 'assets/game/flags/country_canada.avif', category: 'minor' },
+  { id: 'colombia', name: 'Colombia', path: 'assets/game/flags/country_colombia.avif', category: 'minor' },
+  { id: 'cuba', name: 'Cuba', path: 'assets/game/flags/country_cuba.avif', category: 'minor' },
+  { id: 'czech', name: 'Czech', path: 'assets/game/flags/country_czech.avif', category: 'minor' },
+  { id: 'denmark', name: 'Denmark', path: 'assets/game/flags/country_denmark.avif', category: 'minor' },
+  { id: 'egypt', name: 'Egypt', path: 'assets/game/flags/country_egypt.avif', category: 'minor' },
+  { id: 'finland', name: 'Finland', path: 'assets/game/flags/country_finland.avif', category: 'minor' },
+  { id: 'gdr', name: 'Gdr', path: 'assets/game/flags/country_gdr.avif', category: 'minor' },
+  { id: 'hungary', name: 'Hungary', path: 'assets/game/flags/country_hungary.avif', category: 'minor' },
+  { id: 'india', name: 'India', path: 'assets/game/flags/country_india.avif', category: 'minor' },
+  { id: 'indonesia', name: 'Indonesia', path: 'assets/game/flags/country_indonesia.avif', category: 'minor' },
+  { id: 'iran', name: 'Iran', path: 'assets/game/flags/country_iran.avif', category: 'minor' },
+  { id: 'iraq', name: 'Iraq', path: 'assets/game/flags/country_iraq.avif', category: 'minor' },
+  { id: 'ireland', name: 'Ireland', path: 'assets/game/flags/country_ireland.avif', category: 'minor' },
+  { id: 'italy_kingdom', name: 'Italy Kingdom', path: 'assets/game/flags/country_italy_kingdom.avif', category: 'minor' },
+  { id: 'jordan', name: 'Jordan', path: 'assets/game/flags/country_jordan.avif', category: 'minor' },
+  { id: 'kazakhstan', name: 'Kazakhstan', path: 'assets/game/flags/country_kazakhstan.avif', category: 'minor' },
+  { id: 'kuwait', name: 'Kuwait', path: 'assets/game/flags/country_kuwait.avif', category: 'minor' },
+  { id: 'lithuania', name: 'Lithuania', path: 'assets/game/flags/country_lithuania.avif', category: 'minor' },
+  { id: 'malaysia', name: 'Malaysia', path: 'assets/game/flags/country_malaysia.avif', category: 'minor' },
+  { id: 'netherlands', name: 'Netherlands', path: 'assets/game/flags/country_netherlands.avif', category: 'minor' },
+  { id: 'new_zealand', name: 'New Zealand', path: 'assets/game/flags/country_new_zealand.avif', category: 'minor' },
+  { id: 'north_korea', name: 'North Korea', path: 'assets/game/flags/country_north_korea.avif', category: 'minor' },
+  { id: 'norway', name: 'Norway', path: 'assets/game/flags/country_norway.avif', category: 'minor' },
+  { id: 'oman', name: 'Oman', path: 'assets/game/flags/country_oman.avif', category: 'minor' },
+  { id: 'pakistan', name: 'Pakistan', path: 'assets/game/flags/country_pakistan.avif', category: 'minor' },
+  { id: 'philippines', name: 'Philippines', path: 'assets/game/flags/country_philippines.avif', category: 'minor' },
+  { id: 'poland', name: 'Poland', path: 'assets/game/flags/country_poland.avif', category: 'minor' },
+  { id: 'portugal', name: 'Portugal', path: 'assets/game/flags/country_portugal.avif', category: 'minor' },
+  { id: 'romania', name: 'Romania', path: 'assets/game/flags/country_romania.avif', category: 'minor' },
+  { id: 'russia', name: 'Russia', path: 'assets/game/flags/country_russia.avif', category: 'minor' },
+  { id: 'saudi_arabia', name: 'Saudi Arabia', path: 'assets/game/flags/country_saudi_arabia.avif', category: 'minor' },
+  { id: 'serbia', name: 'Serbia', path: 'assets/game/flags/country_serbia.avif', category: 'minor' },
+  { id: 'singapore', name: 'Singapore', path: 'assets/game/flags/country_singapore.avif', category: 'minor' },
+  { id: 'sky_pirates', name: 'Sky Pirates', path: 'assets/game/flags/country_sky_pirates.avif', category: 'minor' },
+  { id: 'slovakia', name: 'Slovakia', path: 'assets/game/flags/country_slovakia.avif', category: 'minor' },
+  { id: 'somali', name: 'Somali', path: 'assets/game/flags/country_somali.avif', category: 'minor' },
+  { id: 'somalia', name: 'Somalia', path: 'assets/game/flags/country_somalia.avif', category: 'minor' },
+  { id: 'south_africa', name: 'South Africa', path: 'assets/game/flags/country_south_africa.avif', category: 'minor' },
+  { id: 'south_vietnam', name: 'South Vietnam', path: 'assets/game/flags/country_south_vietnam.avif', category: 'minor' },
+  { id: 'spain', name: 'Spain', path: 'assets/game/flags/country_spain.avif', category: 'minor' },
+  { id: 'switzerland', name: 'Switzerland', path: 'assets/game/flags/country_switzerland.avif', category: 'minor' },
+  { id: 'syria', name: 'Syria', path: 'assets/game/flags/country_syria.avif', category: 'minor' },
+  { id: 'thailand', name: 'Thailand', path: 'assets/game/flags/country_thailand.avif', category: 'minor' },
+  { id: 'turkey', name: 'Turkey', path: 'assets/game/flags/country_turkey.avif', category: 'minor' },
+  { id: 'ukraine', name: 'Ukraine', path: 'assets/game/flags/country_ukraine.avif', category: 'minor' },
+  { id: 'venezuela', name: 'Venezuela', path: 'assets/game/flags/country_venezuela.avif', category: 'minor' },
+  { id: 'vietnam', name: 'Vietnam', path: 'assets/game/flags/country_vietnam.avif', category: 'minor' },
+  { id: 'yugoslavia', name: 'Yugoslavia', path: 'assets/game/flags/country_yugoslavia.avif', category: 'minor' },
+];
+
+export const getFlagById = (id: string): FlagInfo | undefined => {
+  return FLAGS.find((f) => f.id === id);
+};
+
+export const getFlagByPath = (path: string): FlagInfo | undefined => {
+  return FLAGS.find((f) => f.path === path);
+};

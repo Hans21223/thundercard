@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.venv/
+.claude/
+
+# Unpacked game files (~50k files) — regenerate with tools/wt_ext_cli, see tools/build_vehicle_db.py
+extracted_game/
+tools/wt_ext_cli/
+
+# Local scratch
+preview*.png
+test_*.ps1
+extract_game_assets.py
