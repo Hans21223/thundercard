@@ -63,13 +63,14 @@ export async function copyCardToClipboard(elementId: string): Promise<boolean> {
   }
 }
 
-// Shrink an uploaded image to fit maxW×maxH and return it as a PNG data URL (keeps saves small).
-export async function shrinkImage(file: File, maxW: number, maxH: number): Promise<string> {
+// Shrink an uploaded image to fit maxW×maxH and return it as a data URL (keeps saves small).
+// WebP keeps transparency at a fraction of PNG's size; browsers without it fall back to PNG.
+export async function shrinkImage(file: Blob, maxW: number, maxH: number, type = 'image/png'): Promise<string> {
   const img = await createImageBitmap(file);
   const scale = Math.min(1, maxW / img.width, maxH / img.height);
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(img.width * scale);
   canvas.height = Math.round(img.height * scale);
   canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/png');
+  return canvas.toDataURL(type, 0.9);
 }

@@ -13,6 +13,7 @@ import { EconomyTab } from './components/Editor/EconomyTab';
 import { VisualTab } from './components/Editor/VisualTab';
 import { TechTreeView, MyTree, NodePath, EMPTY_TREE, setCardAt } from './components/TechTreeView';
 import { LibraryModal } from './components/LibraryModal';
+import { SprocketModal } from './components/SprocketModal';
 import { loadVehicleFromStorage, saveVehicleToStorage, loadJson, saveJson } from './utils/storage';
 import { FORMATTERS } from './utils/format';
 
@@ -84,6 +85,8 @@ export const App: React.FC = () => {
   const [editPath, setEditPath] = useState<NodePath | null>(null); // card being edited belongs to My tree
   const [treeMode, setTreeMode] = useState<'game' | 'mine'>('game');
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [sprocketOpen, setSprocketOpen] = useState(false);
+  const [treeKey, setTreeKey] = useState(0); // remounts the tree view so it re-reads nations after an import
   const [autoFormat, setAutoFormat] = useState(() => loadJson<boolean>('thundercard_autoformat') ?? true);
 
   useEffect(() => {
@@ -161,6 +164,9 @@ export const App: React.FC = () => {
         <button type="button" onClick={() => setGamePickerOpen(true)} className="ui-btn-primary">
           Load from game…
         </button>
+        <button type="button" onClick={() => setSprocketOpen(true)} className="ui-btn" title="Make cards from Sprocket .blueprint files">
+          Sprocket…
+        </button>
         <button type="button" onClick={() => setLibraryOpen(true)} className="ui-btn" title="Saved vehicles and tech trees">
           Library…
         </button>
@@ -197,6 +203,7 @@ export const App: React.FC = () => {
 
       {view === 'tree' ? (
         <TechTreeView
+          key={treeKey}
           mode={treeMode}
           onModeChange={setTreeMode}
           gameMode={vehicle.gameMode}
@@ -275,6 +282,21 @@ export const App: React.FC = () => {
         </section>
       </main>
       )}
+
+      <SprocketModal
+        isOpen={sprocketOpen}
+        base={vehicle}
+        onOpenCard={(v) => loadCard(v)}
+        onOpenTree={(t) => {
+          remember();
+          setEditPath(null);
+          setMyTree(t);
+          setTreeMode('mine');
+          setTreeKey((k) => k + 1);
+          setView('tree');
+        }}
+        onClose={() => setSprocketOpen(false)}
+      />
 
       <LibraryModal
         isOpen={libraryOpen}

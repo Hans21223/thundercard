@@ -130,8 +130,12 @@ export const ModernStatCard: React.FC<ModernStatCardProps> = ({ vehicle: v, onVi
       <Group>
         {v.primaryWeapon?.name && (
           <Row label={<span className={BLUE}>{v.primaryWeapon.name}</span>}>
-            <span className="mr-[5px]">Ammo:</span>
-            {v.primaryWeapon.ammo}
+            {v.primaryWeapon.ammo !== '' && (
+              <>
+                <span className="mr-[5px]">Ammo:</span>
+                {v.primaryWeapon.ammo}
+              </>
+            )}
           </Row>
         )}
         {v.secondaryWeapons?.map((w) => (
@@ -144,8 +148,12 @@ export const ModernStatCard: React.FC<ModernStatCardProps> = ({ vehicle: v, onVi
               </>
             }
           >
-            <span className="mr-[5px]">Ammo:</span>
-            {w.ammo}
+            {w.ammo !== '' && (
+              <>
+                <span className="mr-[5px]">Ammo:</span>
+                {w.ammo}
+              </>
+            )}
           </Row>
         ))}
       </Group>
@@ -210,15 +218,17 @@ export const ModernStatCard: React.FC<ModernStatCardProps> = ({ vehicle: v, onVi
         <Row label="Crew">{v.crew}</Row>
         <Row label="Mass:">{v.mass}</Row>
         <Row label={<span className={BLUE}>Engine Power:</span>}>{v.enginePower}</Row>
-        <Row
-          label={
-            <>
-              <span className={BLUE}>Max speed</span> (forward/reverse):
-            </>
-          }
-        >
-          {v.maxSpeedReverse ? `${v.maxSpeedForward} / ${v.maxSpeedReverse}` : v.maxSpeedForward} km/h
-        </Row>
+        {v.maxSpeedForward && (
+          <Row
+            label={
+              <>
+                <span className={BLUE}>Max speed</span> (forward/reverse):
+              </>
+            }
+          >
+            {v.maxSpeedReverse ? `${v.maxSpeedForward} / ${v.maxSpeedReverse}` : v.maxSpeedForward} km/h
+          </Row>
+        )}
         {v.visibility && <Row label="Visibility:">{v.visibility}</Row>}
       </Group>
 
@@ -278,26 +288,30 @@ export const ModernStatCard: React.FC<ModernStatCardProps> = ({ vehicle: v, onVi
 
       <Group>
         {v.researchEfficiencyRanks && <Row label="Max vehicle research efficiency:">{v.researchEfficiencyRanks}</Row>}
-        <Row
-          label={
-            <>
-              Reward <span className={BRIGHT}>{v.rpRewardPercent}</span>
-              <Icon src={RP} />:
-            </>
-          }
-        >
-          {renderRpMultiplier(v.rpMultiplier)}
-        </Row>
-        <Row
-          label={
-            <>
-              Reward <span className={BRIGHT}>{v.slRewardPercent}</span>
-              <Icon src={SL} />:
-            </>
-          }
-        >
-          {renderSlMultiplier(v.slMultiplier)}
-        </Row>
+        {v.rpRewardPercent && (
+          <Row
+            label={
+              <>
+                Reward <span className={BRIGHT}>{v.rpRewardPercent}</span>
+                <Icon src={RP} />:
+              </>
+            }
+          >
+            {renderRpMultiplier(v.rpMultiplier)}
+          </Row>
+        )}
+        {v.slRewardPercent && (
+          <Row
+            label={
+              <>
+                Reward <span className={BRIGHT}>{v.slRewardPercent}</span>
+                <Icon src={SL} />:
+              </>
+            }
+          >
+            {renderSlMultiplier(v.slMultiplier)}
+          </Row>
+        )}
       </Group>
 
       <div className={`mt-[6px] ${DIM}`}>
