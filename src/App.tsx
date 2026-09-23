@@ -138,6 +138,15 @@ export const App: React.FC = () => {
             }}
           />
         )}
+        <a
+          href="https://hans21223.itch.io/sakurarequiem"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-2 pl-3 border-l border-[#353e47] text-[12px] leading-tight text-[#8a939b] hover:text-[#f0f0f0]"
+          title="hans21223.itch.io/sakurarequiem"
+        >
+          Support my work by playing my game <span className="text-[#9cc6de]">Sakura Requiem</span>
+        </a>
       </header>
 
       {view === 'tree' ? (

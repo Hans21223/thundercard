@@ -140,6 +140,17 @@ const TileBox: React.FC<{
   );
 };
 
+// Research arrow from one tile's bottom edge to the next tile's top edge (x = tile center)
+const Arrow: React.FC<{ x: number; from: number; to: number }> = ({ x, from, to }) => (
+  <>
+    <div className="absolute w-2.5 bg-[#7d939e]" style={{ left: x - 5, top: from + 4, height: to - from - 18 }} />
+    <div
+      className="absolute w-0 h-0 border-x-[11px] border-x-transparent border-t-[12px] border-t-[#7d939e]"
+      style={{ left: x - 11, top: to - 15 }}
+    />
+  </>
+);
+
 const TreeCanvas: React.FC<{
   columns: Entry[][];
   premium: Set<number>;
@@ -224,19 +235,10 @@ const TreeCanvas: React.FC<{
       {columns.map((col, ci) =>
         col.map((e, ei) => {
           if (!e.link || ei === 0) return null;
-          const from = pos[ci][ei - 1] + T.H + 4;
-          const to = pos[ci][ei] - 3;
-          if (to - from < 14) return null;
-          const cx = xs.get(ci)! + T.W / 2;
-          return (
-            <React.Fragment key={`a${ci}:${ei}`}>
-              <div className="absolute w-2.5 bg-[#7d939e]" style={{ left: cx - 5, top: from, height: to - from - 11 }} />
-              <div
-                className="absolute w-0 h-0 border-x-[11px] border-x-transparent border-t-[12px] border-t-[#7d939e]"
-                style={{ left: cx - 11, top: to - 12 }}
-              />
-            </React.Fragment>
-          );
+          const from = pos[ci][ei - 1] + T.H;
+          const to = pos[ci][ei];
+          if (to - from < 20) return null;
+          return <Arrow key={`a${ci}:${ei}`} x={xs.get(ci)! + T.W / 2} from={from} to={to} />;
         })
       )}
 
@@ -259,21 +261,38 @@ const TreeCanvas: React.FC<{
                 }}
               />
               {e.folder && open === key && (
-                <div
-                  className="absolute z-10 flex gap-3 p-3 pt-4 bg-[#161b20] border border-[#4a5661] shadow-xl"
-                  style={{ left: xs.get(ci)! - 12, top: pos[ci][ei] + T.H + 6 }}
-                  onClick={(ev) => ev.stopPropagation()}
-                >
-                  {e.tiles.map((t, ii) => (
-                    <div key={ii} className="relative" style={{ width: T.W, height: T.H }}>
-                      <TileBox
-                        entry={{ ...e, folder: false, tiles: [t] }}
-                        selected={isSel && selected![2] === ii}
-                        onClick={() => onPick([ci, ei, ii])}
-                      />
-                    </div>
-                  ))}
-                </div>
+                // Like the game: the rest of the tree blurs, the folder opens as a column of linked vehicles
+                <>
+                  <div
+                    className="absolute inset-0 z-10 bg-black/30 backdrop-blur-[3px]"
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      setOpen(null);
+                    }}
+                  />
+                  <div
+                    className="absolute z-20 bg-[#12171b] border border-[#3d4851] shadow-2xl"
+                    style={{
+                      left: xs.get(ci)! - 21,
+                      top: Math.max(T.HEAD, pos[ci][ei] - 33),
+                      width: T.W + 42,
+                      height: 42 + (e.tiles.length - 1) * T.ROW + T.H,
+                    }}
+                    onClick={(ev) => ev.stopPropagation()}
+                  >
+                    {e.tiles.map((t, ii) => (
+                      <React.Fragment key={ii}>
+                        {ii > 0 && <Arrow x={21 + T.W / 2} from={21 + (ii - 1) * T.ROW + T.H} to={21 + ii * T.ROW} />}
+                        <TileBox
+                          entry={{ ...e, folder: false, tiles: [t] }}
+                          style={{ left: 21, top: 21 + ii * T.ROW }}
+                          selected={isSel && selected![2] === ii}
+                          onClick={() => onPick([ci, ei, ii])}
+                        />
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </>
               )}
             </React.Fragment>
           );

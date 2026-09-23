@@ -36,4 +36,6 @@ Pushing to `main` rebuilds and redeploys the site.
 
 ---
 
+Like ThunderCard? Support my work by playing my game [Sakura Requiem](https://hans21223.itch.io/sakurarequiem).
+
 Fan project, not affiliated with Gaijin Entertainment. Vehicle images, flags, icons and fonts are from War Thunder and belong to Gaijin Entertainment.

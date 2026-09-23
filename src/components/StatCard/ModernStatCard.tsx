@@ -106,7 +106,7 @@ export const ModernStatCard: React.FC<ModernStatCardProps> = ({ vehicle: v, onVi
   // Top accent line color matching unitcard.css
   const topLineColor =
     v.statusType === 'pack' || v.statusType === 'premium'
-      ? '#ff7b591f'
+      ? '#5b4622' // sampled from an in-game premium card
       : v.statusType === 'locked'
         ? '#781511'
         : v.statusType === 'squadron'
