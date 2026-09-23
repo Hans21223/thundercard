@@ -19,8 +19,15 @@ export const VisualTab: React.FC<VisualTabProps> = ({ vehicle, onChange, onOpenF
     reader.readAsDataURL(file);
   };
 
+  // Picture size as width / height scale, the same numbers the card's transform box changes
   const sx = vehicle.imageScale ?? 1;
-  const stretch = (vehicle.imageScaleY ?? sx) / sx;
+  const sy = vehicle.imageScaleY ?? sx;
+  const [linked, setLinked] = useState(true);
+  const setScale = (axis: 'Width' | 'Height', v: number) => {
+    if (!linked) return onChange(axis === 'Width' ? { imageScale: v, imageScaleY: sy } : { imageScaleY: v });
+    const k = v / (axis === 'Width' ? sx : sy);
+    onChange({ imageScale: +(sx * k).toFixed(4), imageScaleY: +(sy * k).toFixed(4) });
+  };
 
   const [editing, setEditing] = useState(false);
 
@@ -64,21 +71,27 @@ export const VisualTab: React.FC<VisualTabProps> = ({ vehicle, onChange, onOpenF
               placeholder="Image path or URL"
               className="ui-input"
             />
-            <label className="grid grid-cols-[70px_1fr_40px] items-center gap-2 text-[12px] text-[#8a939b]">
-              Scale
-              <input
-                type="range"
-                min="0.3"
-                max="3"
-                step="0.05"
-                value={sx}
-                onChange={(e) => {
-                  const s = parseFloat(e.target.value);
-                  onChange({ imageScale: s, imageScaleY: +(s * stretch).toFixed(4) }); // keeps any stretch
-                }}
-                className="accent-[#9cc6de]"
-              />
-              <span className="text-right text-[#c0c0c0]">{sx.toFixed(2)}×</span>
+            {(['Width', 'Height'] as const).map((axis) => {
+              const value = axis === 'Width' ? sx : sy;
+              return (
+                <label key={axis} className="grid grid-cols-[70px_1fr_40px] items-center gap-2 text-[12px] text-[#8a939b]">
+                  {axis}
+                  <input
+                    type="range"
+                    min="0.3"
+                    max="3"
+                    step="0.01"
+                    value={value}
+                    onChange={(e) => setScale(axis, parseFloat(e.target.value))}
+                    className="accent-[#9cc6de]"
+                  />
+                  <span className="text-right text-[#c0c0c0]">{Math.round(value * 100)}%</span>
+                </label>
+              );
+            })}
+            <label className="flex items-center gap-2 text-[12px] text-[#8a939b]">
+              <input type="checkbox" checked={linked} onChange={(e) => setLinked(e.target.checked)} className="ui-check" />
+              Keep proportions
             </label>
             <div className="flex items-center justify-between gap-2 text-[12px] text-[#8a939b]">
               On the card, hover the picture for its transform box: drag to move, corners scale (Shift: freely), sides stretch.

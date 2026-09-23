@@ -112,7 +112,8 @@ const TileBox: React.FC<{
   onDragStart?: () => void;
   onDragEnd?: () => void;
   onContextMenu?: () => void;
-}> = ({ entry, style, selected, onClick, onDragStart, onDragEnd, onContextMenu }) => {
+  tip: string;
+}> = ({ entry, style, selected, onClick, onDragStart, onDragEnd, onContextMenu, tip }) => {
   const t = entry.tiles[0];
   const brs = entry.tiles.map((x) => parseFloat(x.br)).filter((n) => !isNaN(n));
   const br =
@@ -139,7 +140,7 @@ const TileBox: React.FC<{
         e.stopPropagation();
         onClick();
       }}
-      title={entry.folder ? entry.name : t.name}
+      data-tip={tip}
       className={`absolute text-left ${selected ? 'outline outline-2 outline-offset-1 outline-[#9cc6de]' : 'hover:brightness-125'}`}
       style={{ width: T.W, height: T.H, background: KIND_BG[t.kind], border: `1px solid ${KIND_BORDER[t.kind]}`, ...style }}
     >
@@ -201,6 +202,15 @@ const TreeCanvas: React.FC<{
   onPickColumn?: (col: number) => void;
   onMove?: (from: NodePath, to: DropTarget) => void;
 }> = ({ columns, premium, selected, onPick, onOpen, editable, selectedCol, onPickColumn, onMove }) => {
+  // Hover tip: the tile's name and what the mouse does with it
+  const tipOf = (name: string, folder: boolean, drag: boolean) =>
+    [
+      name,
+      folder ? 'Click: open folder' : editable ? 'Click: select · Right-click: open card' : 'Click or right-click: open card',
+      drag && 'Drag: move',
+    ]
+      .filter(Boolean)
+      .join(' · ');
   const [open, setOpen] = useState<string | null>(null); // folder "c:e" whose members are shown
   const [drag, setDrag] = useState<NodePath | null>(null);
   const [drop, setDrop] = useState<DropTarget | null>(null);
@@ -357,6 +367,7 @@ const TreeCanvas: React.FC<{
                   setDrop(null);
                 }}
                 onContextMenu={() => (e.folder ? setOpen(key) : onOpen?.([ci, ei, 0]))}
+                tip={tipOf(e.folder ? e.name || e.tiles.map((t) => t.name).join('/') : e.tiles[0].name, e.folder, !!editable)}
                 onClick={() => {
                   if (e.folder) {
                     setOpen(open === key ? null : key);
@@ -393,6 +404,7 @@ const TreeCanvas: React.FC<{
                           selected={isSel && selected![2] === ii}
                           onClick={() => onPick([ci, ei, ii])}
                           onContextMenu={() => onOpen?.([ci, ei, ii])}
+                          tip={tipOf(t.name, false, false)}
                         />
                       </React.Fragment>
                     ))}

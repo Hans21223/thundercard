@@ -3,7 +3,8 @@ import { Pixels, cutOut, loadPixels, magicWand, segment } from '../utils/backgro
 
 // Background remover with Photoshop-style tools. Red = will be removed.
 // Quick selection: paint over the vehicle, the selection snaps to its outline. Magic wand: click a colour area.
-// Alt or the right mouse button does the opposite of the chosen mode. [ and ] change the brush size, Ctrl+Z undoes.
+// Alt or the right mouse button does the opposite of the chosen mode.
+// Keys, as in Photoshop: W switch tool, X swap keep / remove, [ ] brush size, Ctrl+Z undo, Enter apply, Esc cancel.
 
 interface ImageEditorProps {
   src: string;
@@ -68,11 +69,16 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ src, onApply, onClose 
     setMask(null);
   };
 
-  // Ctrl+Z / [ / ] belong to the editor while it is open, not to the card underneath
+  // The editor's keys (Ctrl+Z included) belong to it while it is open, not to the card underneath
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      if ((e.ctrlKey || e.metaKey) && k === 'z') undo();
+      const ctrl = e.ctrlKey || e.metaKey;
+      if (ctrl && k === 'z') undo();
+      else if (ctrl) return;
+      else if (k === 'w') setTool((t) => (t === 'quick' ? 'wand' : 'quick'));
+      else if (k === 'x') setSubtract((s) => !s);
+      else if (k === 'enter') apply();
       else if (k === '[') setBrush((b) => Math.max(2, b - 2));
       else if (k === ']') setBrush((b) => Math.min(80, b + 2));
       else if (k === 'escape') onClose();
@@ -149,7 +155,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ src, onApply, onClose 
   };
 
   const toolButton = (t: Tool, label: string, hint: string) => (
-    <button type="button" onClick={() => setTool(t)} className={`ui-choice ${tool === t ? 'is-active' : ''}`} title={hint}>
+    <button type="button" onClick={() => setTool(t)} className={`ui-choice ${tool === t ? 'is-active' : ''}`} data-tip={hint}>
       {label}
     </button>
   );
@@ -159,34 +165,34 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ src, onApply, onClose 
       <div className="w-full max-w-5xl max-h-[92vh] flex flex-col bg-[#1e2328] border border-[#353e47]" onClick={(e) => e.stopPropagation()}>
         <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-[#353e47] text-[12px] text-[#8a939b]">
           <span className="font-bold text-[14px] text-[#f0f0f0] mr-2">Remove background</span>
-          {toolButton('quick', 'Quick selection', 'Paint over the vehicle; the selection snaps to its outline')}
-          {toolButton('wand', 'Magic wand', 'Click an area of one colour')}
+          {toolButton('quick', 'Quick selection', 'Quick selection (W): paint over the vehicle, it snaps to the outline')}
+          {toolButton('wand', 'Magic wand', 'Magic wand (W): click an area of one colour')}
           <span className="w-px h-5 bg-[#353e47] mx-1" />
-          <button type="button" onClick={() => setSubtract(false)} className={`ui-choice ${!subtract ? 'is-active' : ''}`} title="Mark what to keep">
+          <button type="button" onClick={() => setSubtract(false)} className={`ui-choice ${!subtract ? 'is-active' : ''}`} data-tip="Mark what to keep (X swaps, Alt: the other one)">
             + Keep
           </button>
-          <button type="button" onClick={() => setSubtract(true)} className={`ui-choice ${subtract ? 'is-active' : ''}`} title="Mark what to remove">
+          <button type="button" onClick={() => setSubtract(true)} className={`ui-choice ${subtract ? 'is-active' : ''}`} data-tip="Mark what to remove (X swaps, Alt: the other one)">
             − Remove
           </button>
           <span className="w-px h-5 bg-[#353e47] mx-1" />
           {tool === 'quick' ? (
-            <label className="flex items-center gap-2">
+            <label className="flex items-center gap-2" data-tip="Brush size ([ and ])">
               Brush
               <input type="range" min="2" max="80" value={brush} onChange={(e) => setBrush(+e.target.value)} className="w-28 accent-[#9cc6de]" />
               <span className="w-8 text-[#c0c0c0]">{brush * 2}px</span>
             </label>
           ) : (
-            <label className="flex items-center gap-2">
+            <label className="flex items-center gap-2" data-tip="How close in colour the wand's area is">
               Tolerance
               <input type="range" min="1" max="60" value={tolerance} onChange={(e) => setTolerance(+e.target.value)} className="w-28 accent-[#9cc6de]" />
               <span className="w-8 text-[#c0c0c0]">{tolerance}</span>
             </label>
           )}
           <div className="flex-1" />
-          <button type="button" onClick={undo} className="ui-btn" title="Ctrl+Z">
+          <button type="button" onClick={undo} className="ui-btn" data-tip="Undo (Ctrl+Z)">
             Undo
           </button>
-          <button type="button" onClick={reset} className="ui-btn">
+          <button type="button" onClick={reset} className="ui-btn" data-tip="Clear all marks">
             Clear
           </button>
         </div>
@@ -222,12 +228,12 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ src, onApply, onClose 
 
         <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-t border-[#353e47] text-[12px] text-[#8a939b]">
           <span className="flex-1">
-            Red is removed. Paint (or click, with the wand) what to keep; Alt or right-drag marks what to remove. [ ] brush size.
+            Red is removed. Paint (or click, with the wand) what to keep; Alt or right-drag marks what to remove.
           </span>
-          <button type="button" onClick={onClose} className="ui-btn">
+          <button type="button" onClick={onClose} className="ui-btn tip-up" data-tip="Cancel (Esc)">
             Cancel
           </button>
-          <button type="button" onClick={apply} disabled={!pix} className="ui-btn-primary">
+          <button type="button" onClick={apply} disabled={!pix} className="ui-btn-primary tip-up" data-tip="Apply (Enter)">
             Apply
           </button>
         </div>

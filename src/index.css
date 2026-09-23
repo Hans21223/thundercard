@@ -73,4 +73,22 @@ body {
   .ui-modal {
     @apply fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70;
   }
+  /* Hover tooltip with the shortcut: data-tip="Undo (Ctrl+Z)" */
+  [data-tip] {
+    @apply relative;
+  }
+  [data-tip]:hover::after {
+    content: attr(data-tip);
+    animation: tip-in 0.1s 0.35s both;
+    @apply absolute left-1/2 top-full mt-1.5 -translate-x-1/2 z-[70] px-2 py-1 whitespace-nowrap pointer-events-none bg-[#0c1118] border border-[#4a5661] text-[12px] leading-4 font-normal text-[#c0c0c0];
+  }
+  [data-tip].tip-up:hover::after {
+    @apply top-auto bottom-full mt-0 mb-1.5;
+  }
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+  }
 }

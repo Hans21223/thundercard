@@ -221,10 +221,10 @@ export const App: React.FC = () => {
         <button type="button" onClick={() => loadCard({ ...BLANK, id: 'custom_' + Date.now() })} className="ui-btn">
           New
         </button>
-        <button type="button" onClick={undo} disabled={!undoStack.current.length} className="ui-btn" title="Undo (Ctrl+Z)">
+        <button type="button" onClick={undo} disabled={!undoStack.current.length} className="ui-btn" data-tip="Undo (Ctrl+Z)">
           Undo
         </button>
-        <button type="button" onClick={redo} disabled={!redoStack.current.length} className="ui-btn" title="Redo (Ctrl+Y)">
+        <button type="button" onClick={redo} disabled={!redoStack.current.length} className="ui-btn" data-tip="Redo (Ctrl+Y)">
           Redo
         </button>
         <button type="button" onClick={() => setSettingsOpen(true)} className="ui-btn">

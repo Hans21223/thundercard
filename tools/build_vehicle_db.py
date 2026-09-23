@@ -163,7 +163,8 @@ def shop_kind(entry, u):
 def tech_trees(shop, have, wp, L):
     """Ground research trees from shop.blk → ({country: columns}, {vehicle id: shop kind}).
     column = [{ids, link, name?}]; more than one id = a folder (name from shop/group/<key>).
-    link: researched from the entry above it (reqAir "" breaks the chain, as in premium columns)."""
+    link: researched from the entry above it (reqAir "" breaks the chain, as in premium columns).
+    Vehicles the game only shows once bought (event versions, launcher parts…) are left out, as in-game."""
     trees, kinds = {}, {}
     for country, branches in shop.items():
         cols = []
@@ -171,9 +172,12 @@ def tech_trees(shop, have, wp, L):
             entries = []
             for key, v in col.items():
                 members = {k: sub for k, sub in v.items() if isinstance(sub, dict)} or {key: v}
-                ids = [m for m in members if m in have]
-                for m in ids:
-                    kinds[m] = shop_kind(members[m], wp[m])
+                for m in members:
+                    if m in have:
+                        kinds[m] = shop_kind(members[m], wp[m])
+                if v.get('showOnlyWhenBought'):
+                    continue
+                ids = [m for m in members if m in have and not members[m].get('showOnlyWhenBought')]
                 if ids:
                     entry = {'ids': ids, 'link': bool(entries) and v.get('reqAir') != ''}
                     if len(ids) > 1:
@@ -257,7 +261,7 @@ def build():
 
         card = {
             'id': uid,
-            'name': L.get(uid.lower() + '_0', uid),
+            'name': L.get(uid.lower() + '_0') or uid,
             'vehicleClass': cls[1],
             'typeLabel': cls[2],
             'rank': ROMAN[r],
@@ -311,7 +315,7 @@ def build():
                 'slRewardPercent': f'{round(mul * 100)}%',
                 'slMultiplier': f'{mul:g}×(100%)',
             }
-        out.append({'short': L.get(uid.lower() + '_shop', uid), 'country': u['country'], 'card': card, 'modes': modes})
+        out.append({'short': L.get(uid.lower() + '_shop') or uid, 'country': u['country'], 'card': card, 'modes': modes})
 
     out.sort(key=lambda v: (v['country'], v['modes']['realistic']['battleRating'], v['short']))
     by_id = {v['card']['id']: v for v in out}
