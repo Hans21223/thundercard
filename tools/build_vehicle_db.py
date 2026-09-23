@@ -92,6 +92,58 @@ def ammo_names(wblk, tank_mods, L):
     return names
 
 
+def ammo_rows(weapons, tank_mods, mods_db, L):
+    """Port unitBullets.nut: all cannon weapons (guns only if no cannon), grouped by caliber.
+
+    weaponryInfo.nut classifies cannon at >=15 mm, including gun-style ATGM launchers.
+    Mixed belts display '<caliber> <short bullet type>'; single shells use their localized name.
+    Repeated mounts and duplicate default/researched rounds are listed only once.
+    """
+    mod_names = set(tank_mods)
+    for name in tank_mods:
+        effects = (mods_db.get(name) or {}).get('effects') or {}
+        for key in ('additiveBulletMod', 'bulletMod'):
+            if isinstance(effects.get(key), str):
+                mod_names.add(effects[key])
+
+    guns, cannons = [], []
+    for w in weapons:
+        if w.get('dummy') or not w.get('blk'):
+            continue
+        wb = weapon_blk(w['blk'])
+        if any(wb.get(k) for k in ('rocketGun', 'bombGun', 'torpedoGun')):
+            continue
+        bullets = as_list(wb.get('bullet'))
+        if bullets:
+            (cannons if bullets[0].get('caliber', 0) * 1000 >= 15 else guns).append(wb)
+
+    rows, seen = {}, set()
+    for wb in cannons or guns:
+        sets = [] if wb.get('notUseDefaultBulletInGui') else [as_list(wb.get('bullet'))]
+        sets += [as_list(v.get('bullet')) for k, v in wb.items()
+                 if k != 'bullet' and k in mod_names and isinstance(v, dict)]
+        for bullets in sets:
+            for b in bullets:
+                # The JSON unpacker stores repeated BLK parameters as lists; named BLK lookup uses the first.
+                name = next(iter(as_list(b.get('bulletName'))), '')
+                kind = next(iter(as_list(b.get('bulletType'))), '')
+                mm = b.get('caliber', 0) * 1000
+                key = (name, kind)
+                if not mm or key in seen:
+                    continue
+                seen.add(key)
+                if len(bullets) > 1:
+                    label = f"{caliber(mm)} {L.get((kind + '/name/short').lower(), kind)}"
+                else:
+                    label = L.get(name.lower(), name)
+                if not label:
+                    continue
+                cal = caliber(math.floor(mm))
+                row = rows.setdefault(cal, {'id': f'ammo_{len(rows) + 1}', 'caliber': cal, 'types': []})
+                row['types'].append(label)
+    return list(rows.values())
+
+
 def blk_file(path):
     p = os.path.join(ACES, (path or '').lower())
     return load(p) if path and os.path.exists(p) else {}
@@ -288,6 +340,7 @@ def build():
             'systems': systems(u, t, mods_db, L),
             'ammoTypes': ammo,
             'ammoCaliber': cal,
+            'ammoRows': ammo_rows(weapons, u.get('modifications') or tank_mods, mods_db, L),
             'crew': u.get('crewTotalCount', ''),
             'mass': half_up(phys.get('Mass', {}).get('TakeOff', t.get('mass', 0)) / 1000) + ' t',
             'enginePower': f"{round(eng.get('horsePowers', 0))} hp at {round(eng.get('maxRPM', 0))} rpm",

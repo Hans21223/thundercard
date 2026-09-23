@@ -33,6 +33,12 @@ export interface WeaponEntry {
   isSecondary?: boolean;
 }
 
+export interface AmmoRow {
+  id: string;
+  caliber: string;
+  types: string[];
+}
+
 export interface VehicleData {
   id: string;
   name: string;
@@ -85,6 +91,8 @@ export interface VehicleData {
   systems: string;
   ammoTypes: string[];
   ammoCaliber?: string;
+  // When present, these are all Ammo rows (even [] to hide them). Older saves use the fields above.
+  ammoRows?: AmmoRow[];
   
   // Mobility & Physical
   crew: string | number;

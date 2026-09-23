@@ -5,6 +5,7 @@ Make War Thunder vehicle stat cards that look like the in-game tooltip.
 **Use it online:** https://hans21223.github.io/thundercard/
 
 - **Load from game** — pick any of ~1,200 ground vehicles; name, BR, rank, weapons, mobility, economy and recon drone are filled in from the game files (build 2.59).
+- **Ammo rows** — Weapons → Ammunition → Add Ammo row adds a caliber and shell list, including secondary cannons and missile launchers. Load from game fills all applicable rows, grouped by caliber like the game. Older saved cards still load their original ammunition row.
 - Edit anything else by hand: armor types, systems, visibility, fire rate, owned / locked / premium / pack states. Fields auto-format when you leave them — type `130 38 50` and get `130 / 38 / 50 mm`.
 - **Tech tree** — browse each nation's real research tree and open any vehicle's card, or build your own tree (copy the game's, add your mockups, move them around, folders) and save it as PNG / JSON.
 - Upload, paste (Ctrl+V) or drop a vehicle picture; pictures are shrunk to what the card needs. Upload your own flag. Hover the vehicle picture on the card for a Photoshop-style transform box: drag to move, corners scale (Shift: freely), sides stretch.

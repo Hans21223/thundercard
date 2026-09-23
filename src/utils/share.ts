@@ -36,6 +36,7 @@ export async function cardFromLink(hash: string): Promise<Partial<VehicleData> |
     if (typeof card !== 'object' || !card || typeof card.name !== 'string') return null;
     if (!Array.isArray(card.secondaryWeapons)) delete card.secondaryWeapons;
     if (!Array.isArray(card.ammoTypes)) delete card.ammoTypes;
+    if (!Array.isArray(card.ammoRows)) delete card.ammoRows;
     if (typeof card.primaryWeapon !== 'object' || !card.primaryWeapon) delete card.primaryWeapon;
     return card;
   } catch {

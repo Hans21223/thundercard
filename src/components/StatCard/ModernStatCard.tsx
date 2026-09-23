@@ -1,6 +1,7 @@
 import React from 'react';
 import { VehicleData } from '../../types/vehicle';
 import { CardHeader, track } from './CardHeader';
+import { ammoLabel, getAmmoRows } from '../../utils/ammo';
 
 interface ModernStatCardProps {
   vehicle: VehicleData;
@@ -226,11 +227,11 @@ export const ModernStatCard: React.FC<ModernStatCardProps> = ({ vehicle: v, onVi
         </Group>
 
         <Group>
-          {v.ammoTypes?.length > 0 && (
-            <Row label={`Ammo${(' ' + (v.ammoCaliber || v.primaryWeapon?.name.match(/^[\d.]+ mm/)?.[0] || '')).trimEnd()}:`}>
-              <div className={BLUE}>{items(v.ammoTypes)}</div>
+          {getAmmoRows(v).filter((row) => row.types.some((t) => t.trim())).map((row) => (
+            <Row key={row.id} label={ammoLabel(row.caliber)}>
+              <div className={BLUE}>{items(row.types.filter((t) => t.trim()))}</div>
             </Row>
-          )}
+          ))}
         </Group>
 
         <Group>

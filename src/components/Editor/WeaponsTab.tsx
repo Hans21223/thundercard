@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { VehicleData, WeaponEntry } from '../../types/vehicle';
+import { AmmoRowsEditor } from './AmmoRowsEditor';
 
 interface WeaponsTabProps {
   vehicle: VehicleData;
@@ -9,9 +10,6 @@ interface WeaponsTabProps {
 
 export const WeaponsTab: React.FC<WeaponsTabProps> = ({ vehicle, onChange, autoFormat }) => {
   const secondaries = vehicle.secondaryWeapons || [];
-  // Shells: the text stays as typed while the field is in use (commas, spaces), the card gets the parsed list
-  const [shellsDraft, setShellsDraft] = useState<string | null>(null);
-  const shellsText = (vehicle.ammoTypes || []).join(', ');
   const updateSecondary = (id: string, updates: Partial<WeaponEntry>) =>
     onChange({ secondaryWeapons: secondaries.map((w) => (w.id === id ? { ...w, ...updates } : w)) });
 
@@ -133,25 +131,7 @@ export const WeaponsTab: React.FC<WeaponsTabProps> = ({ vehicle, onChange, autoF
       </div>
 
       <div className="ui-section">
-        <span className="ui-heading">Ammunition</span>
-        <div className="grid grid-cols-[90px_1fr] gap-3">
-          {field('Caliber', 'ammoCaliber', '75 mm')}
-          <div>
-            <label className="ui-label">Shells, comma separated</label>
-            <input
-              type="text"
-              value={shellsDraft ?? shellsText}
-              onFocus={() => setShellsDraft(shellsText)}
-              onChange={(e) => {
-                setShellsDraft(e.target.value);
-                onChange({ ammoTypes: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) });
-              }}
-              onBlur={() => setShellsDraft(null)}
-              placeholder="XM885, XM884"
-              className="ui-input"
-            />
-          </div>
-        </div>
+        <AmmoRowsEditor vehicle={vehicle} onChange={onChange} autoFormat={autoFormat} />
         <div className="grid grid-cols-[1fr_90px] gap-3 mt-3">
           {field('Drone', 'uavName', 'UAV Recon Micro')}
           {field('Drones', 'uavRecon', '1pcs')}
