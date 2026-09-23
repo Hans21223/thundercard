@@ -1,11 +1,12 @@
 import React from 'react';
 import { VehicleData } from '../../types/vehicle';
-import { CLASS_METAS } from './CardHeader';
+import { CLASS_METAS, PictureBox } from './CardHeader';
 
 // The "Simple" 555px card layout (kept as cardLayout 'legacy' so saved JSON still loads).
 
 interface LegacyStatCardProps {
   vehicle: VehicleData;
+  onImageChange?: (u: Partial<VehicleData>) => void;
 }
 
 const SL = 'assets/images/sl_flat.png';
@@ -22,7 +23,7 @@ const Row: React.FC<{ label: string; value?: React.ReactNode; icon?: string }> =
     </div>
   ) : null;
 
-export const LegacyStatCard: React.FC<LegacyStatCardProps> = ({ vehicle: v }) => {
+export const LegacyStatCard: React.FC<LegacyStatCardProps> = ({ vehicle: v, onImageChange }) => {
   const classMeta = CLASS_METAS[v.vehicleClass] || CLASS_METAS.medium_tank;
 
   let borderColor = '#57767e';
@@ -60,9 +61,12 @@ export const LegacyStatCard: React.FC<LegacyStatCardProps> = ({ vehicle: v }) =>
         </div>
       </div>
 
-      <div className="relative w-full h-[180px] bg-[#22272e] rounded my-2 flex items-center justify-center overflow-hidden border border-black/40">
-        {v.vehicleImage && <img src={v.vehicleImage} alt={v.name} className="max-h-[160px] max-w-[90%] object-contain" />}
-      </div>
+      <PictureBox
+        v={v}
+        onChange={onImageChange}
+        className="w-full h-[180px] bg-[#22272e] rounded my-2 flex items-center justify-center border border-black/40"
+        imgClassName="max-h-[160px] max-w-[90%] object-contain"
+      />
 
       {v.statusType === 'squadron' && <div className="text-center text-[#a1d26a] font-bold text-[14px] my-1">Squadron vehicle</div>}
       {v.statusType === 'pack' && (

@@ -1,9 +1,136 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { VehicleData, VehicleClass } from '../../types/vehicle';
 
 interface CardHeaderProps {
   vehicle: VehicleData;
+  onImageChange?: (u: Partial<VehicleData>) => void;
 }
+
+// Calls fn with the pointer's offset from where the drag started, until the button is released
+const track = (e: React.PointerEvent<HTMLElement>, fn: (dx: number, dy: number, ev: PointerEvent) => void) => {
+  if (e.button !== 0) return;
+  e.stopPropagation();
+  const el = e.currentTarget;
+  const [x0, y0] = [e.clientX, e.clientY];
+  el.setPointerCapture(e.pointerId);
+  el.onpointermove = (ev) => fn(ev.clientX - x0, ev.clientY - y0, ev);
+  el.onpointerup = el.onpointercancel = () => (el.onpointermove = null);
+};
+
+// Handle positions on the box as fractions of its width / height
+const HANDLES = [[0, 0], [0.5, 0], [1, 0], [1, 0.5], [1, 1], [0.5, 1], [0, 1], [0, 0.5]] as const;
+const cursorOf = (hx: number, hy: number) =>
+  hx === 0.5 ? 'ns-resize' : hy === 0.5 ? 'ew-resize' : hx === hy ? 'nwse-resize' : 'nesw-resize';
+
+// The card's picture box. The vehicle picture carries the card's own offset / scale; with onChange, hovering
+// shows a Photoshop-style transform box: drag inside to move, corners scale in proportion (Shift: freely),
+// side handles stretch one way. The box sits outside the clipped picture area so its handles stay reachable.
+export const PictureBox: React.FC<{
+  v: VehicleData;
+  onChange?: (u: Partial<VehicleData>) => void;
+  className: string; // the picture area (clips the picture)
+  imgClassName: string;
+  children?: React.ReactNode; // drawn behind the picture (flag, placeholder)
+}> = ({ v, onChange, className, imgClassName, children }) => {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  // Untransformed layout of the <img> in wrapper coordinates, and the picture's natural size
+  const [geo, setGeo] = useState<{ l: number; t: number; w: number; h: number; nw: number; nh: number } | null>(null);
+  const measure = () => {
+    const [wrap, box, img] = [wrapRef.current, boxRef.current, imgRef.current];
+    if (!wrap || !box || !img?.naturalWidth) return setGeo(null);
+    const [b, w] = [box.getBoundingClientRect(), wrap.getBoundingClientRect()];
+    const g = {
+      l: b.left - w.left + box.clientLeft + img.offsetLeft,
+      t: b.top - w.top + box.clientTop + img.offsetTop,
+      w: img.offsetWidth,
+      h: img.offsetHeight,
+      nw: img.naturalWidth,
+      nh: img.naturalHeight,
+    };
+    setGeo((old) => (old && JSON.stringify(old) === JSON.stringify(g) ? old : g));
+  };
+  useLayoutEffect(measure);
+
+  const x = v.imageX ?? 0;
+  const y = v.imageY ?? 0;
+  const sx = v.imageScale ?? 1;
+  const sy = v.imageScaleY ?? sx;
+
+  let frame: React.ReactNode = null;
+  if (onChange && geo) {
+    // object-contain + object-bottom: the visible picture inside the <img>; the transform origin is its bottom center
+    const fit = Math.min(geo.w / geo.nw, geo.h / geo.nh);
+    const [pw, ph] = [geo.nw * fit, geo.nh * fit];
+    const [px, py] = [geo.l + (geo.w - pw) / 2, geo.t + geo.h - ph];
+    const [ox, oy] = [geo.l + geo.w / 2, geo.t + geo.h];
+    const r = { L: ox + x + sx * (px - ox), T: oy + y + sy * (py - oy), W: sx * pw, H: sy * ph };
+    // Box on screen → the card's offset / scale
+    const setBox = (L: number, T: number, W: number, H: number) => {
+      const [nsx, nsy] = [W / pw, H / ph];
+      onChange({
+        imageScale: +nsx.toFixed(4),
+        imageScaleY: +nsy.toFixed(4),
+        imageX: Math.round(L - ox - nsx * (px - ox)),
+        imageY: Math.round(T - oy - nsy * (py - oy)),
+      });
+    };
+    const resize = (e: React.PointerEvent<HTMLElement>, hx: number, hy: number) =>
+      track(e, (dx, dy, ev) => {
+        const [ddx, ddy] = [hx ? dx : -dx, hy ? dy : -dy]; // outward = bigger
+        let W = hx === 0.5 ? r.W : Math.max(8, r.W + ddx);
+        let H = hy === 0.5 ? r.H : Math.max(8, r.H + ddy);
+        if (hx !== 0.5 && hy !== 0.5 && !ev.shiftKey) {
+          // Corner: follow the mouse along the diagonal, keep proportions
+          const k = Math.max(8 / Math.min(r.W, r.H), 1 + (ddx * r.W + ddy * r.H) / (r.W ** 2 + r.H ** 2));
+          [W, H] = [r.W * k, r.H * k];
+        }
+        // The opposite side stays put
+        setBox(hx === 0 ? r.L + r.W - W : r.L, hy === 0 ? r.T + r.H - H : r.T, W, H);
+      });
+    frame = (
+      <div
+        title="Drag to move. Drag a corner to scale, Shift for free scaling; drag a side to stretch."
+        onPointerDown={(e) => track(e, (dx, dy) => onChange({ imageX: Math.round(x + dx), imageY: Math.round(y + dy) }))}
+        className="absolute z-20 border border-[#3d8ee6] cursor-move touch-none opacity-0 group-hover:opacity-100"
+        style={{ left: r.L, top: r.T, width: r.W, height: r.H }}
+      >
+        {HANDLES.map(([hx, hy]) => (
+          <span
+            key={`${hx}${hy}`}
+            onPointerDown={(e) => resize(e, hx, hy)}
+            className="absolute w-[7px] h-[7px] -ml-[4px] -mt-[4px] bg-white border border-[#3d8ee6]"
+            style={{ left: `${hx * 100}%`, top: `${hy * 100}%`, cursor: cursorOf(hx, hy) }}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={wrapRef} className="group relative w-full">
+      <div ref={boxRef} className={`relative overflow-hidden ${className}`}>
+        {children}
+        {v.vehicleImage && (
+          <img
+            ref={imgRef}
+            src={v.vehicleImage}
+            alt={v.name}
+            draggable={false}
+            onLoad={measure}
+            className={`${imgClassName} pointer-events-none`}
+            style={{ transform: `translate(${x}px, ${y}px) scale(${sx}, ${sy})`, transformOrigin: '50% 100%' }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = 'assets/game/tanks/us_m60a1_rise_mod.avif';
+            }}
+          />
+        )}
+      </div>
+      {frame}
+    </div>
+  );
+};
 
 // In-game War Thunder class colors (from const/colors.css) & authentic vector icons (from def_*_radar.svg)
 interface ClassMeta {
@@ -91,7 +218,7 @@ export const CLASS_METAS: Record<VehicleClass, ClassMeta> = {
   },
 };
 
-export const CardHeader: React.FC<CardHeaderProps> = ({ vehicle }) => {
+export const CardHeader: React.FC<CardHeaderProps> = ({ vehicle, onImageChange }) => {
   const classMeta = CLASS_METAS[vehicle.vehicleClass] || CLASS_METAS.medium_tank;
   const lines = (text: string) => text.split('\n').map((line, i) => <div key={i}>{line}</div>);
   const withGe = (line: string, key: number) => (
@@ -129,7 +256,12 @@ export const CardHeader: React.FC<CardHeaderProps> = ({ vehicle }) => {
       </div>
 
       {/* Vehicle render box matching in-game aircraft-image-nest */}
-      <div className="relative w-full h-[223px] overflow-hidden flex items-end justify-center">
+      <PictureBox
+        v={vehicle}
+        onChange={onImageChange}
+        className="w-full h-[223px] flex items-end justify-center"
+        imgClassName="relative z-10 w-full h-[190px] object-contain object-bottom"
+      >
         {vehicle.countryFlag && (
           <img
             src={vehicle.countryFlag}
@@ -143,19 +275,8 @@ export const CardHeader: React.FC<CardHeaderProps> = ({ vehicle }) => {
             }}
           />
         )}
-        {vehicle.vehicleImage ? (
-          <img
-            src={vehicle.vehicleImage}
-            alt={vehicle.name}
-            className="relative z-10 w-full h-[190px] object-contain object-bottom pointer-events-none"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = 'assets/game/tanks/us_m60a1_rise_mod.avif';
-            }}
-          />
-        ) : (
-          <div className="relative z-10 text-xs text-gray-500 italic pb-8">No vehicle image</div>
-        )}
-      </div>
+        {!vehicle.vehicleImage && <div className="relative z-10 text-xs text-gray-500 italic pb-8">No vehicle image</div>}
+      </PictureBox>
 
       {vehicle.statusType === 'locked' && (
         <div className="w-full mt-[4px] text-[#f02020]">

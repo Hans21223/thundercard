@@ -1,5 +1,6 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { VehicleData } from '../../types/vehicle';
+import { ImageEditor } from '../ImageEditor';
 
 interface VisualTabProps {
   vehicle: VehicleData;
@@ -17,6 +18,11 @@ export const VisualTab: React.FC<VisualTabProps> = ({ vehicle, onChange, onOpenF
     reader.onload = () => reader.result && onChange({ vehicleImage: reader.result as string });
     reader.readAsDataURL(file);
   };
+
+  const sx = vehicle.imageScale ?? 1;
+  const stretch = (vehicle.imageScaleY ?? sx) / sx;
+
+  const [editing, setEditing] = useState(false);
 
   const opacity = vehicle.flagBackdropOpacity ?? 1;
   const scale = vehicle.flagBackdropScale || 1;
@@ -58,6 +64,43 @@ export const VisualTab: React.FC<VisualTabProps> = ({ vehicle, onChange, onOpenF
               placeholder="Image path or URL"
               className="ui-input"
             />
+            <label className="grid grid-cols-[70px_1fr_40px] items-center gap-2 text-[12px] text-[#8a939b]">
+              Scale
+              <input
+                type="range"
+                min="0.3"
+                max="3"
+                step="0.05"
+                value={sx}
+                onChange={(e) => {
+                  const s = parseFloat(e.target.value);
+                  onChange({ imageScale: s, imageScaleY: +(s * stretch).toFixed(4) }); // keeps any stretch
+                }}
+                className="accent-[#9cc6de]"
+              />
+              <span className="text-right text-[#c0c0c0]">{sx.toFixed(2)}×</span>
+            </label>
+            <div className="flex items-center justify-between gap-2 text-[12px] text-[#8a939b]">
+              On the card, hover the picture for its transform box: drag to move, corners scale (Shift: freely), sides stretch.
+              <button
+                type="button"
+                onClick={() => onChange({ imageScale: 1, imageScaleY: 1, imageX: 0, imageY: 0 })}
+                className="ui-btn shrink-0"
+              >
+                Reset
+              </button>
+            </div>
+            <button type="button" onClick={() => setEditing(true)} disabled={!vehicle.vehicleImage} className="ui-btn">
+              Remove background…
+            </button>
+            {editing && (
+              <ImageEditor
+                src={vehicle.vehicleImage}
+                // The cut-out is cropped to the vehicle, so the old placement no longer applies
+                onApply={(url) => onChange({ vehicleImage: url, imageScale: 1, imageScaleY: 1, imageX: 0, imageY: 0 })}
+                onClose={() => setEditing(false)}
+              />
+            )}
           </div>
         </div>
       </div>

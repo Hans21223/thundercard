@@ -6,6 +6,7 @@ interface ModernStatCardProps {
   vehicle: VehicleData;
   onViewArmor?: () => void;
   onViewXRay?: () => void;
+  onImageChange?: (u: Partial<VehicleData>) => void;
 }
 
 // Colors and metrics sampled from the in-game capture (public/assets/sample/hstvl_statcard_reference.png).
@@ -100,7 +101,7 @@ function renderSlMultiplier(val: string) {
   );
 }
 
-export const ModernStatCard: React.FC<ModernStatCardProps> = ({ vehicle: v, onViewArmor, onViewXRay }) => {
+export const ModernStatCard: React.FC<ModernStatCardProps> = ({ vehicle: v, onViewArmor, onViewXRay, onImageChange }) => {
   const isAce = v.topCrewStar;
 
   // Top accent line color matching unitcard.css
@@ -125,7 +126,7 @@ export const ModernStatCard: React.FC<ModernStatCardProps> = ({ vehicle: v, onVi
         boxShadow: '0 12px 36px rgba(0, 0, 0, 0.65)',
       }}
     >
-      <CardHeader vehicle={v} />
+      <CardHeader vehicle={v} onImageChange={onImageChange} />
 
       <Group>
         {v.primaryWeapon?.name && (

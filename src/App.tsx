@@ -12,7 +12,8 @@ import { ProtectionTab } from './components/Editor/ProtectionTab';
 import { EconomyTab } from './components/Editor/EconomyTab';
 import { VisualTab } from './components/Editor/VisualTab';
 import { TechTreeView, MyTree, NodePath, EMPTY_TREE, setCardAt } from './components/TechTreeView';
-import { LibraryModal } from './components/LibraryModal';
+import { LibraryModal, autoSave } from './components/LibraryModal';
+import { SettingsModal } from './components/SettingsModal';
 import { SprocketModal } from './components/SprocketModal';
 import { loadVehicleFromStorage, saveVehicleToStorage, loadJson, saveJson } from './utils/storage';
 import { FORMATTERS } from './utils/format';
@@ -88,6 +89,8 @@ export const App: React.FC = () => {
   const [sprocketOpen, setSprocketOpen] = useState(false);
   const [treeKey, setTreeKey] = useState(0); // remounts the tree view so it re-reads nations after an import
   const [autoFormat, setAutoFormat] = useState(() => loadJson<boolean>('thundercard_autoformat') ?? true);
+  const [autoSaveOn, setAutoSaveOn] = useState(() => loadJson<boolean>('thundercard_autosave') ?? true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     saveVehicleToStorage(vehicle);
@@ -98,9 +101,39 @@ export const App: React.FC = () => {
   useEffect(() => {
     saveJson('thundercard_autoformat', autoFormat);
   }, [autoFormat]);
+  useEffect(() => {
+    saveJson('thundercard_autosave', autoSaveOn);
+  }, [autoSaveOn]);
+
+  // Auto-save: edits go into the Library save the card / tree was opened from, or once edited,
+  // into a new save in the Library's Autosave folder. Pending edits are flushed before anything replaces them.
+  type SaveIds = { cards: string | null; trees: string | null };
+  const saveIds = useRef<SaveIds>({ cards: null, trees: null });
+  const dirty = useRef({ cards: false, trees: false });
+  const warnedFull = useRef(false);
+  const flush = () => {
+    if (!autoSaveOn) return;
+    for (const kind of ['cards', 'trees'] as const) {
+      if (!dirty.current[kind]) continue;
+      dirty.current[kind] = false;
+      const id =
+        kind === 'cards'
+          ? autoSave(kind, saveIds.current.cards, vehicle.name, vehicle)
+          : autoSave(kind, saveIds.current.trees, myTree.name, myTree);
+      if (id) saveIds.current[kind] = id;
+      else if (!warnedFull.current) {
+        warnedFull.current = true;
+        alert('Auto-save stopped: browser storage is full. Export or delete some saves in the Library.');
+      }
+    }
+  };
+  useEffect(() => {
+    const t = setTimeout(flush, 1000);
+    return () => clearTimeout(t);
+  }, [vehicle, myTree, autoSaveOn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Undo / redo over the card and My tree. Typing merges into one step; every other change is its own step.
-  type Snapshot = { vehicle: VehicleData; myTree: MyTree };
+  type Snapshot = { vehicle: VehicleData; myTree: MyTree; ids: SaveIds };
   const undoStack = useRef<Snapshot[]>([]);
   const redoStack = useRef<Snapshot[]>([]);
   const lastChange = useRef(0);
@@ -108,7 +141,7 @@ export const App: React.FC = () => {
   const remember = (typing = false) => {
     const now = Date.now();
     if (!typing || now - lastChange.current > 700) {
-      undoStack.current = [...undoStack.current.slice(-99), { vehicle, myTree }];
+      undoStack.current = [...undoStack.current.slice(-99), { vehicle, myTree, ids: { ...saveIds.current } }];
       redoStack.current = [];
       rerender((n) => n + 1);
     }
@@ -117,9 +150,12 @@ export const App: React.FC = () => {
   const step = (from: React.MutableRefObject<Snapshot[]>, to: React.MutableRefObject<Snapshot[]>) => {
     const snap = from.current.pop();
     if (!snap) return;
-    to.current.push({ vehicle, myTree });
+    flush();
+    to.current.push({ vehicle, myTree, ids: { ...saveIds.current } });
     setVehicle(snap.vehicle);
     setMyTree(snap.myTree);
+    saveIds.current = snap.ids;
+    dirty.current = { cards: snap.ids.cards !== null, trees: snap.ids.trees !== null }; // re-save what undo changed
     lastChange.current = 0;
     rerender((n) => n + 1);
   };
@@ -140,12 +176,16 @@ export const App: React.FC = () => {
   // Edits made in the editor; a card opened from My tree is saved back into the tree as you type
   const updateVehicle = (updates: Partial<VehicleData>) => {
     remember(true);
+    dirty.current[editPath ? 'trees' : 'cards'] = true;
     const next = { ...vehicle, ...updates };
     setVehicle(next);
     if (editPath) setMyTree((t) => setCardAt(t, editPath, next));
   };
-  const loadCard = (v: VehicleData, path: NodePath | null = null) => {
+  const loadCard = (v: VehicleData, path: NodePath | null = null, saveId: string | null = null) => {
+    flush();
     remember();
+    saveIds.current.cards = saveId;
+    dirty.current.cards = false;
     setEditPath(path);
     setVehicle(v);
     setView('card');
@@ -167,7 +207,15 @@ export const App: React.FC = () => {
         <button type="button" onClick={() => setSprocketOpen(true)} className="ui-btn" title="Make cards from Sprocket .blueprint files">
           Sprocket…
         </button>
-        <button type="button" onClick={() => setLibraryOpen(true)} className="ui-btn" title="Saved vehicles and tech trees">
+        <button
+          type="button"
+          onClick={() => {
+            flush(); // the Library reads what auto-save wrote
+            setLibraryOpen(true);
+          }}
+          className="ui-btn"
+          title="Saved vehicles and tech trees"
+        >
           Library…
         </button>
         <button type="button" onClick={() => loadCard({ ...BLANK, id: 'custom_' + Date.now() })} className="ui-btn">
@@ -178,6 +226,9 @@ export const App: React.FC = () => {
         </button>
         <button type="button" onClick={redo} disabled={!redoStack.current.length} className="ui-btn" title="Redo (Ctrl+Y)">
           Redo
+        </button>
+        <button type="button" onClick={() => setSettingsOpen(true)} className="ui-btn">
+          Settings…
         </button>
         <div className="flex-1" />
         {view === 'card' && (
@@ -209,8 +260,11 @@ export const App: React.FC = () => {
           gameMode={vehicle.gameMode}
           currentCard={vehicle}
           myTree={myTree}
-          onChangeMyTree={(t) => {
+          onChangeMyTree={(t, replaced) => {
+            if (replaced) flush(); // save the old tree before it goes
             remember();
+            if (replaced) saveIds.current.trees = null;
+            dirty.current.trees = true;
             setEditPath(null); // the tree changed shape; stop writing edits into an old slot
             setMyTree(t);
           }}
@@ -255,10 +309,6 @@ export const App: React.FC = () => {
               <VisualTab vehicle={vehicle} onChange={updateVehicle} onOpenFlagPicker={() => setFlagPickerOpen(true)} />
             )}
           </div>
-          <label className="flex items-center gap-2 px-4 py-2 border-t border-[#353e47] text-[12px] text-[#8a939b]">
-            <input type="checkbox" checked={autoFormat} onChange={(e) => setAutoFormat(e.target.checked)} className="ui-check" />
-            Auto-format numbers when you leave a field (130 38 50 becomes 130 / 38 / 50 mm)
-          </label>
         </aside>
 
         <section className="flex-1 overflow-auto flex flex-col items-center gap-3 p-8 bg-[#101316]">
@@ -275,9 +325,10 @@ export const App: React.FC = () => {
               vehicle={vehicle}
               onViewArmor={() => setActiveTab('protection')}
               onViewXRay={() => setActiveTab('protection')}
+              onImageChange={updateVehicle}
             />
           ) : (
-            <LegacyStatCard vehicle={vehicle} />
+            <LegacyStatCard vehicle={vehicle} onImageChange={updateVehicle} />
           )}
         </section>
       </main>
@@ -288,7 +339,10 @@ export const App: React.FC = () => {
         base={vehicle}
         onOpenCard={(v) => loadCard(v)}
         onOpenTree={(t) => {
+          flush();
           remember();
+          saveIds.current.trees = null;
+          dirty.current.trees = true;
           setEditPath(null);
           setMyTree(t);
           setTreeMode('mine');
@@ -303,16 +357,43 @@ export const App: React.FC = () => {
         initialTab={view === 'tree' ? 'trees' : 'cards'}
         card={vehicle}
         tree={myTree}
-        onOpenCard={(v) => loadCard(v)}
-        onOpenTree={(t) => {
+        onOpenCard={(v, id) => loadCard(v, null, id ?? null)}
+        onOpenTree={(t, id) => {
+          flush();
           remember();
+          saveIds.current.trees = id ?? null;
+          dirty.current.trees = false;
           setEditPath(null);
           setMyTree(t);
           setTreeMode('mine');
           setView('tree');
         }}
+        onSaved={(kind, id) => {
+          saveIds.current[kind] = id;
+          dirty.current[kind] = false;
+        }}
         onClose={() => setLibraryOpen(false)}
       />
+
+      {settingsOpen && (
+        <SettingsModal
+          onClose={() => setSettingsOpen(false)}
+          settings={[
+            {
+              label: 'Auto-save',
+              hint: 'Edits are saved into the Library as you work: into the save you opened, otherwise into the Autosave folder (newest 30 kept).',
+              value: autoSaveOn,
+              onChange: setAutoSaveOn,
+            },
+            {
+              label: 'Auto-format',
+              hint: 'Tidy numbers when you leave a field: 130 38 50 becomes 130 / 38 / 50 mm.',
+              value: autoFormat,
+              onChange: setAutoFormat,
+            },
+          ]}
+        />
+      )}
 
       <FlagPickerModal
         isOpen={flagPickerOpen}

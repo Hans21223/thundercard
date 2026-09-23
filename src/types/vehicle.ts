@@ -48,6 +48,10 @@ export interface VehicleData {
   battleRating: string;
   countryFlag: string;
   vehicleImage: string;
+  imageScale?: number; // 1 = fit the picture box
+  imageScaleY?: number; // vertical scale when stretched, defaults to imageScale
+  imageX?: number; // px offset, set by dragging the picture on the card
+  imageY?: number;
   flagBackdropOpacity: number;
   flagBackdropScale?: number;
   

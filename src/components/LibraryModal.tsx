@@ -22,17 +22,36 @@ type Kind = 'cards' | 'trees';
 const KEY: Record<Kind, string> = { cards: 'thundercard_lib_cards', trees: 'thundercard_lib_trees' };
 const load = <T,>(kind: Kind): Library<T> => loadJson<Library<T>>(KEY[kind]) ?? { folders: [], items: [] };
 
+// Auto-save: writes data into library item `id`, or makes a new save in the Autosave folder (newest 30 kept).
+// Returns the item id, or null when browser storage is full.
+export const AUTOSAVE = 'Autosave';
+export function autoSave<T>(kind: Kind, id: string | null, name: string, data: T): string | null {
+  const lib = load<T>(kind);
+  const now = Date.now();
+  let items = lib.items;
+  if (id && items.some((it) => it.id === id)) {
+    items = items.map((it) => (it.id !== id ? it : { ...it, saved: now, data, name: it.folder === AUTOSAVE ? name : it.name }));
+  } else {
+    id = `${now}`;
+    const keep = items.filter((it) => it.folder === AUTOSAVE).sort((a, b) => b.saved - a.saved).slice(0, 29);
+    items = [...items.filter((it) => it.folder !== AUTOSAVE || keep.includes(it)), { id, name, folder: AUTOSAVE, saved: now, data }];
+  }
+  const folders = lib.folders.includes(AUTOSAVE) ? lib.folders : [AUTOSAVE, ...lib.folders];
+  return saveJson(KEY[kind], { folders, items }) ? id : null;
+}
+
 interface LibraryModalProps {
   isOpen: boolean;
   initialTab: Kind;
   card: VehicleData;
   tree: MyTree;
-  onOpenCard: (card: VehicleData) => void;
-  onOpenTree: (tree: MyTree) => void;
+  onOpenCard: (card: VehicleData, saveId?: string) => void;
+  onOpenTree: (tree: MyTree, saveId?: string) => void;
+  onSaved: (kind: Kind, saveId: string) => void; // auto-save keeps writing into this save
   onClose: () => void;
 }
 
-export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, card, tree, onOpenCard, onOpenTree, onClose }) => {
+export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, card, tree, onOpenCard, onOpenTree, onSaved, onClose }) => {
   const [tab, setTab] = useState<Kind>(initialTab);
   const [libs, setLibs] = useState({ cards: load<VehicleData>('cards'), trees: load<MyTree>('trees') });
   const [saveName, setSaveName] = useState('');
@@ -46,6 +65,7 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, 
     setWasOpen(isOpen);
     if (isOpen) {
       setTab(initialTab);
+      setLibs({ cards: load<VehicleData>('cards'), trees: load<MyTree>('trees') }); // auto-save may have written since
       setSaveName('');
     }
   }
@@ -58,21 +78,19 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, 
   const commit = (next: Library<VehicleData | MyTree>) => {
     if (!saveJson(KEY[tab], next)) {
       alert('Browser storage is full. Use "Export" to keep a copy as a file, then delete some saves.');
-      return;
+      return false;
     }
     setLibs({ ...libs, [tab]: next });
+    return true;
   };
   const patchItem = (id: string, patch: Partial<LibItem<VehicleData | MyTree>>) =>
     commit({ ...lib, items: lib.items.map((it) => (it.id === id ? { ...it, ...patch } : it)) });
 
-  const save = () =>
-    commit({
-      ...lib,
-      items: [
-        ...lib.items,
-        { id: `${Date.now()}`, name: saveName.trim() || currentName, folder: saveFolder, saved: Date.now(), data: structuredClone(current) },
-      ],
-    });
+  const save = () => {
+    const id = `${Date.now()}`;
+    const item = { id, name: saveName.trim() || currentName, folder: saveFolder, saved: Date.now(), data: structuredClone(current) };
+    if (commit({ ...lib, items: [...lib.items, item] })) onSaved(tab, id);
+  };
 
   const addFolder = () =>
     setAsk({
@@ -119,15 +137,15 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, 
     if (fileRef.current) fileRef.current.value = '';
   };
 
-  const open = (data: VehicleData | MyTree) => {
-    if (tab === 'cards') onOpenCard(structuredClone(data as VehicleData));
-    else onOpenTree(structuredClone(data as MyTree));
+  const open = (data: VehicleData | MyTree, id?: string) => {
+    if (tab === 'cards') onOpenCard(structuredClone(data as VehicleData), id);
+    else onOpenTree(structuredClone(data as MyTree), id);
     onClose();
   };
 
   const row = (it: LibItem<VehicleData | MyTree>) => (
     <div key={it.id} className="flex items-center gap-2 px-2 py-1.5 border-b border-[#2a3239] hover:bg-[#252b31]">
-      <button type="button" onClick={() => open(it.data)} className="flex-1 min-w-0 text-left">
+      <button type="button" onClick={() => open(it.data, it.id)} className="flex-1 min-w-0 text-left">
         <div className="truncate text-[13px] text-[#f0f0f0]">{it.name}</div>
         <div className="text-[11px] text-[#8a939b]">{new Date(it.saved).toLocaleString()}</div>
       </button>
@@ -146,7 +164,11 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, 
       </select>
       <button
         type="button"
-        onClick={() => confirm(`Replace "${it.name}" with the current ${tab === 'cards' ? 'card' : 'tree'}?`) && patchItem(it.id, { data: structuredClone(current), saved: Date.now() })}
+        onClick={() =>
+          confirm(`Replace "${it.name}" with the current ${tab === 'cards' ? 'card' : 'tree'}?`) &&
+          patchItem(it.id, { data: structuredClone(current), saved: Date.now() }) &&
+          onSaved(tab, it.id)
+        }
         className="ui-btn !h-6 !px-2 text-[12px]"
       >
         Save over

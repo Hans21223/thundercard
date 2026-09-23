@@ -31,6 +31,19 @@ export const setCardAt = (t: MyTree, [c, e, i]: NodePath, card: VehicleData): My
   ),
 });
 
+// Premium columns hold premium / pack / squadron / event vehicles and draw no research arrows:
+// a vehicle put across the divider becomes premium, or a normal researchable one
+const PREMIUM_KINDS: string[] = ['premium', 'pack', 'squadron', 'event'];
+const intoSection = (en: MyTreeEntry, premium: boolean): MyTreeEntry => ({
+  ...en,
+  link: premium ? false : en.link || en.cards.some((cd) => PREMIUM_KINDS.includes(cd.statusType)),
+  cards: en.cards.map((cd) =>
+    PREMIUM_KINDS.includes(cd.statusType) === premium
+      ? cd
+      : { ...cd, statusType: premium ? 'premium' : 'standard', priceCurrency: premium ? 'ge' : 'sl' }
+  ),
+});
+
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 const rankNum = (r?: string) => Math.max(1, ROMAN.indexOf(r ?? 'I'));
 
@@ -402,7 +415,7 @@ interface TechTreeViewProps {
   gameMode: GameMode;
   currentCard: VehicleData;
   myTree: MyTree;
-  onChangeMyTree: (t: MyTree) => void;
+  onChangeMyTree: (t: MyTree, replaced?: boolean) => void; // replaced: a different tree, not an edit of this one
   onOpenCard: (card: VehicleData, editPath?: NodePath) => void;
 }
 
@@ -481,25 +494,26 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
   const mapEntry = (fn: (e: MyTreeEntry) => MyTreeEntry) =>
     setCols(cols.map((col, ci) => (ci !== sel![0] ? col : col.map((en, ei) => (ei === sel![1] ? fn(en) : en)))));
 
+  const isPrem = (ci: number) => !!myTree.premium?.includes(ci);
+
   const addCurrent = () => {
-    const newCard = { ...currentCard };
+    // Into the selection, else the selected column, else the first researchable one
+    const base = cols.length ? cols : [[]];
+    const firstResearch = base.findIndex((_, ci) => !isPrem(ci));
+    const target = sel?.[0] ?? selCol ?? (firstResearch < 0 ? 0 : firstResearch);
+    const entry = intoSection({ cards: [{ ...currentCard }], link: false }, isPrem(target));
     if (sel && selIsFolder) {
-      mapEntry((en) => ({ ...en, cards: [...en.cards, newCard] }));
+      mapEntry((en) => ({ ...en, cards: [...en.cards, ...entry.cards] }));
       return;
     }
-    const entry: MyTreeEntry = { cards: [newCard], link: false };
     if (!sel) {
-      // Into the selected column, otherwise the first researchable one
-      const base = cols.length ? cols : [[]];
-      const firstResearch = base.findIndex((_, ci) => !myTree.premium?.includes(ci));
-      const target = selCol ?? (firstResearch < 0 ? 0 : firstResearch);
-      setCols(base.map((col, ci) => (ci === target ? [...col, { ...entry, link: col.length > 0 }] : col)));
+      setCols(base.map((col, ci) => (ci === target ? [...col, { ...entry, link: col.length > 0 && !isPrem(target) }] : col)));
       setSel([target, base[target].length, 0]);
       setSelCol(target);
       return;
     }
     const [c, e] = sel;
-    setCols(cols.map((col, ci) => (ci === c ? [...col.slice(0, e + 1), { ...entry, link: true }, ...col.slice(e + 1)] : col)));
+    setCols(cols.map((col, ci) => (ci === c ? [...col.slice(0, e + 1), { ...entry, link: !isPrem(c) }, ...col.slice(e + 1)] : col)));
     setSel([c, e + 1, 0]);
   };
 
@@ -519,7 +533,7 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
       if (to >= next.length) next.push([]);
       next[c].splice(e, 1);
       const at = Math.min(e, next[to].length);
-      next[to].splice(at, 0, selEntry);
+      next[to].splice(at, 0, intoSection(selEntry, isPrem(to)));
       setCols(next);
       setSel([to, at, sel[2]]);
     }
@@ -564,7 +578,7 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
     const p = new Set(myTree.premium ?? []);
     if (p.has(selCol)) p.delete(selCol);
     else p.add(selCol);
-    update({ premium: [...p] });
+    update({ premium: [...p], columns: cols.map((col, ci) => (ci === selCol ? col.map((en) => intoSection(en, p.has(ci))) : col)) });
   };
 
   // New column goes right after the selected one (same section), otherwise at the end
@@ -593,7 +607,7 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
   const moveTo = ([c, e]: NodePath, to: { col: number; rank: number; slot: number }) => {
     const next = cols.map((col) => [...col]);
     const [entry] = next[c].splice(e, 1);
-    const moved = { ...entry, cards: entry.cards.map((cd) => ({ ...cd, rank: ROMAN[to.rank] })) };
+    const moved = intoSection({ ...entry, cards: entry.cards.map((cd) => ({ ...cd, rank: ROMAN[to.rank] })) }, isPrem(to.col));
     const target = next[to.col];
     const sameRank = target.flatMap((en, i) => (rankNum(en.cards[0]?.rank) === to.rank ? [i] : []));
     const at =
@@ -614,7 +628,7 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
       placeholder: 'Tree name',
       confirmText: 'Create',
       onSubmit: (name) => {
-        onChangeMyTree({ name, country, columns: [[], [], [], [], [], [], []], premium: [5, 6] }); // the nation you last picked
+        onChangeMyTree({ name, country, columns: [[], [], [], [], [], [], []], premium: [5, 6] }, true); // the nation you last picked
         setSel(null);
         setSelCol(null);
       },
@@ -628,7 +642,7 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
       country,
       columns: gameTree.map((col) => col.map((e) => ({ link: e.link, name: e.name, folder: e.ids.length > 1, cards: e.ids.map(card) }))),
       premium: premiumOf(gameTree),
-    });
+    }, true);
     setSel(null);
   };
 
@@ -637,7 +651,7 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
     try {
       const t = JSON.parse(await file.text()) as MyTree;
       if (!Array.isArray(t.columns)) throw new Error();
-      onChangeMyTree(t);
+      onChangeMyTree(t, true);
       setSel(null);
     } catch {
       alert('That file is not a ThunderCard tree.');
