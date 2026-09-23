@@ -14,6 +14,7 @@ import { VisualTab } from './components/Editor/VisualTab';
 import { TechTreeView, MyTree, NodePath, EMPTY_TREE, setCardAt } from './components/TechTreeView';
 import { LibraryModal, autoSave } from './components/LibraryModal';
 import { SettingsModal } from './components/SettingsModal';
+import { FeedbackModal } from './components/FeedbackModal';
 import { SprocketModal } from './components/SprocketModal';
 import { loadVehicleFromStorage, saveVehicleToStorage, loadJson, saveJson } from './utils/storage';
 import { FORMATTERS } from './utils/format';
@@ -97,6 +98,7 @@ export const App: React.FC = () => {
   const [saveNote, setSaveNote] = useState<'' | 'unsaved' | 'saved' | 'full'>(''); // save status in the header
   const [dropping, setDropping] = useState(false); // a picture file is dragged over the card
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   useEffect(() => {
     saveVehicleToStorage(vehicle);
@@ -287,6 +289,9 @@ export const App: React.FC = () => {
         <button type="button" onClick={() => setSettingsOpen(true)} className="ui-btn">
           Settings…
         </button>
+        <button type="button" onClick={() => setFeedbackOpen(true)} className="ui-btn" data-tip="Report a bug or suggest an idea">
+          Feedback…
+        </button>
         {saveNote && (
           <span
             className={`text-[12px] ${saveNote === 'full' ? 'text-[#fa4a38]' : 'text-[#8a939b]'}`}
@@ -461,6 +466,12 @@ export const App: React.FC = () => {
         onClose={() => setLibraryOpen(false)}
       />
 
+      {feedbackOpen && (
+        <FeedbackModal
+          context={view === 'tree' ? `tech tree (${treeMode === 'mine' ? 'my tree' : 'game tree'})` : `${vehicle.cardLayout === 'legacy' ? 'Simple' : 'In-game'} card`}
+          onClose={() => setFeedbackOpen(false)}
+        />
+      )}
       {settingsOpen && (
         <SettingsModal
           onClose={() => setSettingsOpen(false)}

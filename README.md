@@ -14,6 +14,8 @@ Make War Thunder vehicle stat cards that look like the in-game tooltip.
 - **Sprocket** — pick your Sprocket faction folder (or single `.blueprint` files) to make cards from your designs: mass, crew, guns, ammo, shell types, gun elevation, engine and top speed come from the blueprint, the picture from the design's side view. Add a whole faction as its own tech tree nation. `node tools/check_sprocket.mjs <Vehicles folder>` prints what each blueprint yields.
 - **Copy image** to paste straight into Discord, or save PNG / JPG (1×, 2× or 4×, in Settings). **Copy link** shares the card as a link; **Save JSON** shares an editable card with its uploaded pictures.
 
+Found a bug or have an idea? Use **Feedback…** in the app, or [open an issue](https://github.com/Hans21223/thundercard/issues/new).
+
 Card colors, font sizes and spacing are measured against in-game captures (`public/assets/sample/`).
 
 ## Run locally
