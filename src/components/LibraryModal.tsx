@@ -22,22 +22,30 @@ type Kind = 'cards' | 'trees';
 const KEY: Record<Kind, string> = { cards: 'thundercard_lib_cards', trees: 'thundercard_lib_trees' };
 export const loadLibrary = <T,>(kind: Kind): Library<T> => loadJson<Library<T>>(KEY[kind]) ?? { folders: [], items: [] };
 
-// Auto-save: writes data into library item `id`, or makes a new save in the Autosave folder (newest 30 kept).
-// Returns the item id, or null when browser storage is full.
+// Saving outside the Library dialog: writes data into library item `id`, or makes a new save. Automatic saves
+// go in the Autosave folder (newest 30 kept); a manual one (Ctrl+S) is a normal save, and takes an autosaved
+// item out of that folder. Returns the item id, or null when browser storage is full.
 export const AUTOSAVE = 'Autosave';
-export function autoSave<T>(kind: Kind, id: string | null, name: string, data: T): string | null {
+export function autoSave<T>(kind: Kind, id: string | null, name: string, data: T, manual = false): string | null {
   const lib = loadLibrary<T>(kind);
   const now = Date.now();
   let items = lib.items;
   if (id && items.some((it) => it.id === id)) {
-    items = items.map((it) => (it.id !== id ? it : { ...it, saved: now, data, name: it.folder === AUTOSAVE ? name : it.name }));
+    items = items.map((it) =>
+      it.id !== id
+        ? it
+        : { ...it, saved: now, data, name: it.folder === AUTOSAVE ? name : it.name, folder: manual && it.folder === AUTOSAVE ? '' : it.folder }
+    );
+  } else if (manual) {
+    id = `${now}`;
+    items = [...items, { id, name, folder: '', saved: now, data }];
   } else {
     id = `${now}`;
     const keep = items.filter((it) => it.folder === AUTOSAVE).sort((a, b) => b.saved - a.saved).slice(0, 29);
     items = [...items.filter((it) => it.folder !== AUTOSAVE || keep.includes(it)), { id, name, folder: AUTOSAVE, saved: now, data }];
   }
-  const folders = lib.folders.includes(AUTOSAVE) ? lib.folders : [AUTOSAVE, ...lib.folders];
-  return saveJson(KEY[kind], { folders, items }) ? id : null;
+  const needsFolder = items.some((it) => it.folder === AUTOSAVE) && !lib.folders.includes(AUTOSAVE);
+  return saveJson(KEY[kind], { folders: needsFolder ? [AUTOSAVE, ...lib.folders] : lib.folders, items }) ? id : null;
 }
 
 interface LibraryModalProps {

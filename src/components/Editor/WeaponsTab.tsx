@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { VehicleData, WeaponEntry } from '../../types/vehicle';
 
 interface WeaponsTabProps {
@@ -9,6 +9,9 @@ interface WeaponsTabProps {
 
 export const WeaponsTab: React.FC<WeaponsTabProps> = ({ vehicle, onChange, autoFormat }) => {
   const secondaries = vehicle.secondaryWeapons || [];
+  // Shells: the text stays as typed while the field is in use (commas, spaces), the card gets the parsed list
+  const [shellsDraft, setShellsDraft] = useState<string | null>(null);
+  const shellsText = (vehicle.ammoTypes || []).join(', ');
   const updateSecondary = (id: string, updates: Partial<WeaponEntry>) =>
     onChange({ secondaryWeapons: secondaries.map((w) => (w.id === id ? { ...w, ...updates } : w)) });
 
@@ -137,8 +140,13 @@ export const WeaponsTab: React.FC<WeaponsTabProps> = ({ vehicle, onChange, autoF
             <label className="ui-label">Shells, comma separated</label>
             <input
               type="text"
-              value={(vehicle.ammoTypes || []).join(', ')}
-              onChange={(e) => onChange({ ammoTypes: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) })}
+              value={shellsDraft ?? shellsText}
+              onFocus={() => setShellsDraft(shellsText)}
+              onChange={(e) => {
+                setShellsDraft(e.target.value);
+                onChange({ ammoTypes: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) });
+              }}
+              onBlur={() => setShellsDraft(null)}
               placeholder="XM885, XM884"
               className="ui-input"
             />

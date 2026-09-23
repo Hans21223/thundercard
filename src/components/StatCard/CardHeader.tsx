@@ -7,7 +7,7 @@ interface CardHeaderProps {
 }
 
 // Calls fn with the pointer's offset from where the drag started, until the button is released
-const track = (e: React.PointerEvent<HTMLElement>, fn: (dx: number, dy: number, ev: PointerEvent) => void) => {
+export const track = (e: React.PointerEvent<HTMLElement>, fn: (dx: number, dy: number, ev: PointerEvent) => void) => {
   if (e.button !== 0) return;
   e.stopPropagation();
   const el = e.currentTarget;

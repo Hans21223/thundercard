@@ -94,7 +94,7 @@ export const App: React.FC = () => {
   const [autoSaveOn, setAutoSaveOn] = useState(() => loadJson<boolean>('thundercard_autosave') ?? true);
   const [hoverCards, setHoverCards] = useState(() => loadJson<boolean>('thundercard_hover_cards') ?? true);
   const [exportScale, setExportScale] = useState(() => loadJson<number>('thundercard_export_scale') ?? 2);
-  const [saveNote, setSaveNote] = useState<'' | 'saving' | 'saved' | 'full'>(''); // auto-save status in the header
+  const [saveNote, setSaveNote] = useState<'' | 'unsaved' | 'saved' | 'full'>(''); // save status in the header
   const [dropping, setDropping] = useState(false); // a picture file is dragged over the card
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -117,21 +117,21 @@ export const App: React.FC = () => {
     saveJson('thundercard_export_scale', exportScale);
   }, [exportScale]);
 
-  // Auto-save: edits go into the Library save the card / tree was opened from, or once edited,
-  // into a new save in the Library's Autosave folder. Pending edits are flushed before anything replaces them.
+  // Saving into the Library: Ctrl+S any time, into the save the card / tree was opened from (or a new one).
+  // Auto-save, never while typing, saves unsaved edits when the card or tree is about to be replaced (loading
+  // another, New, undo), when the Library opens and when you leave the page, into the Autosave folder if new.
+  type Kind = 'cards' | 'trees';
   type SaveIds = { cards: string | null; trees: string | null };
   const saveIds = useRef<SaveIds>({ cards: null, trees: null });
   const dirty = useRef({ cards: false, trees: false });
   const warnedFull = useRef(false);
-  const flush = () => {
-    if (!autoSaveOn) return;
-    for (const kind of ['cards', 'trees'] as const) {
-      if (!dirty.current[kind]) continue;
+  const save = (kinds: Kind[], manual: boolean) => {
+    for (const kind of kinds) {
       dirty.current[kind] = false;
       const id =
         kind === 'cards'
-          ? autoSave(kind, saveIds.current.cards, vehicle.name, vehicle)
-          : autoSave(kind, saveIds.current.trees, myTree.name, myTree);
+          ? autoSave(kind, saveIds.current.cards, vehicle.name, vehicle, manual)
+          : autoSave(kind, saveIds.current.trees, myTree.name, myTree, manual);
       if (id) {
         saveIds.current[kind] = id;
         setSaveNote('saved');
@@ -140,15 +140,22 @@ export const App: React.FC = () => {
       setSaveNote('full');
       if (!warnedFull.current) {
         warnedFull.current = true;
-        alert('Auto-save stopped: browser storage is full. Export or delete some saves in the Library.');
+        alert("Couldn't save: the browser's storage is full. Export or delete some saves in the Library.");
       }
     }
   };
+  const flush = () => autoSaveOn && save((['cards', 'trees'] as const).filter((k) => dirty.current[k]), false);
   useEffect(() => {
-    if (autoSaveOn && (dirty.current.cards || dirty.current.trees)) setSaveNote('saving');
-    const t = setTimeout(flush, 1000);
-    return () => clearTimeout(t);
-  }, [vehicle, myTree, autoSaveOn]); // eslint-disable-line react-hooks/exhaustive-deps
+    setSaveNote((note) => (dirty.current.cards || dirty.current.trees ? 'unsaved' : note === 'unsaved' ? '' : note));
+  }, [vehicle, myTree]);
+  // Leaving the page (closing the tab, switching away) counts as switching
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+  useEffect(() => {
+    const onHide = () => document.hidden && flushRef.current();
+    document.addEventListener('visibilitychange', onHide);
+    return () => document.removeEventListener('visibilitychange', onHide);
+  }, []);
 
   // Undo / redo over the card and My tree. Typing merges into one step; every other change is its own step.
   type Snapshot = { vehicle: VehicleData; myTree: MyTree; ids: SaveIds };
@@ -182,9 +189,11 @@ export const App: React.FC = () => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      if (!(e.ctrlKey || e.metaKey) || (k !== 'z' && k !== 'y')) return;
+      if (!(e.ctrlKey || e.metaKey) || !['z', 'y', 's'].includes(k)) return;
       e.preventDefault();
-      if (k === 'y' || e.shiftKey) redo();
+      // Ctrl+S: the card, or the tree when in the tree view or editing one of its cards
+      if (k === 's') save([view === 'tree' || editPath ? 'trees' : 'cards'], true);
+      else if (k === 'y' || e.shiftKey) redo();
       else undo();
     };
     window.addEventListener('keydown', onKey);
@@ -278,12 +287,12 @@ export const App: React.FC = () => {
         <button type="button" onClick={() => setSettingsOpen(true)} className="ui-btn">
           Settings…
         </button>
-        {autoSaveOn && saveNote && (
+        {saveNote && (
           <span
             className={`text-[12px] ${saveNote === 'full' ? 'text-[#fa4a38]' : 'text-[#8a939b]'}`}
-            data-tip="Auto-save writes your edits into the Library"
+            data-tip={autoSaveOn ? 'Ctrl+S saves into the Library; auto-save also saves when you switch or leave' : 'Ctrl+S saves into the Library'}
           >
-            {{ saving: 'Saving…', saved: 'Saved ✓', full: 'Not saved: storage full' }[saveNote]}
+            {{ unsaved: 'Unsaved · Ctrl+S', saved: 'Saved ✓', full: 'Not saved: storage full' }[saveNote]}
           </span>
         )}
         <div className="flex-1" />
@@ -402,7 +411,7 @@ export const App: React.FC = () => {
               vehicle={vehicle}
               onViewArmor={() => setActiveTab('protection')}
               onViewXRay={() => setActiveTab('protection')}
-              onImageChange={updateVehicle}
+              onEdit={updateVehicle}
             />
           ) : (
             <LegacyStatCard vehicle={vehicle} onImageChange={updateVehicle} />
@@ -458,7 +467,7 @@ export const App: React.FC = () => {
           settings={[
             {
               label: 'Auto-save',
-              hint: 'Edits are saved into the Library as you work: into the save you opened, otherwise into the Autosave folder (newest 30 kept).',
+              hint: 'When you switch to another card or tree, open the Library or leave the page, unsaved edits are saved into the Library: into the save you opened, otherwise into the Autosave folder (newest 30 kept). Ctrl+S saves any time.',
               value: autoSaveOn,
               onChange: setAutoSaveOn,
             },

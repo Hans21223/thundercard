@@ -1,13 +1,15 @@
 import React from 'react';
 import { VehicleData } from '../../types/vehicle';
-import { CardHeader } from './CardHeader';
+import { CardHeader, track } from './CardHeader';
 
 interface ModernStatCardProps {
   vehicle: VehicleData;
   onViewArmor?: () => void;
   onViewXRay?: () => void;
-  onImageChange?: (u: Partial<VehicleData>) => void;
+  onEdit?: (u: Partial<VehicleData>) => void; // editing on the card itself: picture, label column
 }
+
+const LABEL_WIDTH = 218; // the game's
 
 // Colors and metrics sampled from the in-game capture (public/assets/sample/hstvl_statcard_reference.png).
 // The game draws no bold here: highlighted values are regular-weight white.
@@ -24,13 +26,13 @@ const SL = 'assets/game/svg/item_type_warpoints.svg';
 const GE = 'assets/game/svg/item_type_eagles.svg';
 const STAR = 'assets/game/svg/spec_icon2.svg';
 
-// Label column is 218px; long labels are clipped at its right edge (in-game they auto-scroll).
+// Label column is 218px in-game (adjustable per card); long labels are clipped at its right edge (in-game they auto-scroll).
 const Row: React.FC<{ label: React.ReactNode; sub?: React.ReactNode; children?: React.ReactNode }> = ({
   label,
   sub,
   children,
 }) => (
-  <div className="grid grid-cols-[218px_1fr]">
+  <div className="grid grid-cols-[var(--label-w)_1fr]">
     <div>
       <div className="flex overflow-hidden whitespace-nowrap">
         <span className="shrink-0">{label}</span>
@@ -38,7 +40,8 @@ const Row: React.FC<{ label: React.ReactNode; sub?: React.ReactNode; children?: 
       </div>
       {sub}
     </div>
-    <div>{children}</div>
+    {/* Values wrap inside the card; a single overlong word breaks rather than running past the edge */}
+    <div className="min-w-0 [overflow-wrap:anywhere]">{children}</div>
   </div>
 );
 
@@ -59,11 +62,12 @@ const ViewButton: React.FC<{ icon: string; text: string; onClick?: () => void }>
   </div>
 );
 
-// Comma lists wrap between items like in-game, never inside one
+// Comma lists wrap between items like in-game; an item too long for the whole column wraps inside itself
+// (inline-block: it moves to the next line as a unit when it fits there, and only breaks when it can't)
 const items = (list: string[]) =>
   list.map((it, i) => (
     <React.Fragment key={i}>
-      <span className="whitespace-nowrap">{i < list.length - 1 ? `${it},` : it}</span>{' '}
+      <span className="inline-block max-w-full">{i < list.length - 1 ? `${it},` : it}</span>{' '}
     </React.Fragment>
   ));
 
@@ -101,8 +105,9 @@ function renderSlMultiplier(val: string) {
   );
 }
 
-export const ModernStatCard: React.FC<ModernStatCardProps> = ({ vehicle: v, onViewArmor, onViewXRay, onImageChange }) => {
+export const ModernStatCard: React.FC<ModernStatCardProps> = ({ vehicle: v, onViewArmor, onViewXRay, onEdit }) => {
   const isAce = v.topCrewStar;
+  const labelWidth = v.labelWidth ?? LABEL_WIDTH;
 
   // Top accent line color matching unitcard.css
   const topLineColor =
@@ -124,196 +129,210 @@ export const ModernStatCard: React.FC<ModernStatCardProps> = ({ vehicle: v, onVi
         borderTop: `3px solid ${topLineColor}`,
         padding: '8px',
         boxShadow: '0 12px 36px rgba(0, 0, 0, 0.65)',
+        ['--label-w' as string]: `${labelWidth}px`,
       }}
     >
-      <CardHeader vehicle={v} onImageChange={onImageChange} />
+      <CardHeader vehicle={v} onImageChange={onEdit} />
 
-      <Group>
-        {v.primaryWeapon?.name && (
-          <Row label={<span className={BLUE}>{v.primaryWeapon.name}</span>}>
-            {v.primaryWeapon.ammo !== '' && (
-              <>
-                <span className="mr-[5px]">Ammo:</span>
-                {v.primaryWeapon.ammo}
-              </>
-            )}
-          </Row>
+      <div className="relative group/stats">
+        {/* Hovering the stats shows the column edge: drag it to move the value column */}
+        {onEdit && (
+          <div
+            title="Drag to move the value column; double-click for the game's 218 px"
+            onPointerDown={(e) => track(e, (dx) => onEdit({ labelWidth: Math.round(Math.min(330, Math.max(120, labelWidth + dx))) }))}
+            onDoubleClick={() => onEdit({ labelWidth: LABEL_WIDTH })}
+            className="absolute inset-y-0 z-10 w-2 -ml-1 cursor-col-resize touch-none opacity-0 group-hover/stats:opacity-100 before:absolute before:inset-y-0 before:left-1/2 before:border-l before:border-dashed before:border-[#9cc6de]"
+            style={{ left: labelWidth }}
+          />
         )}
-        {v.secondaryWeapons?.map((w) => (
-          <Row
-            key={w.id}
-            label={
-              <>
-                {w.prefix && <span className="inline-block w-[33px]">{w.prefix}</span>}
-                <span className={BLUE}>{w.name}</span>
-              </>
-            }
-          >
-            {w.ammo !== '' && (
-              <>
-                <span className="mr-[5px]">Ammo:</span>
-                {w.ammo}
-              </>
-            )}
-          </Row>
-        ))}
-      </Group>
 
-      <Group>
-        {v.uavRecon && <Row label={<span className={BLUE}>{v.uavName || 'UAV Recon Micro'}</span>}>{v.uavRecon}</Row>}
-        {v.guidanceSpeedHorStock && (
-          <Row label="Guidance Speed:">
-            <div>
-              Hor.: {v.guidanceSpeedHorStock}°/s{isAce && <Ace value={`${v.guidanceSpeedHorAce}°/s`} />}
-            </div>
-            <div>
-              Vert.: {v.guidanceSpeedVertStock}°/s{isAce && <Ace value={`${v.guidanceSpeedVertAce}°/s`} />}
-            </div>
-          </Row>
-        )}
-        {v.verticalGuidance && <Row label="Vertical Guidance:">{v.verticalGuidance}</Row>}
-        {v.fireRate && <Row label="Fire rate:">{v.fireRate}</Row>}
-        {v.reloadingRate && (
-          <Row label="Reloading rate:">
-            {v.reloadingRate}
-            {isAce && v.reloadingRateAce && <Ace value={v.reloadingRateAce} />}
-          </Row>
-        )}
-      </Group>
+        <Group>
+          {v.primaryWeapon?.name && (
+            <Row label={<span className={BLUE}>{v.primaryWeapon.name}</span>}>
+              {v.primaryWeapon.ammo !== '' && (
+                <>
+                  <span className="mr-[5px]">Ammo:</span>
+                  {v.primaryWeapon.ammo}
+                </>
+              )}
+            </Row>
+          )}
+          {v.secondaryWeapons?.map((w) => (
+            <Row
+              key={w.id}
+              label={
+                <>
+                  {w.prefix && <span className="inline-block w-[33px]">{w.prefix}</span>}
+                  <span className={BLUE}>{w.name}</span>
+                </>
+              }
+            >
+              {w.ammo !== '' && (
+                <>
+                  <span className="mr-[5px]">Ammo:</span>
+                  {w.ammo}
+                </>
+              )}
+            </Row>
+          ))}
+        </Group>
 
-      <Group>
-        <Row label="Protection:" sub={<ViewButton icon="assets/game/svg/btn_dm_viewer_armor.svg" text="Armor" onClick={onViewArmor} />}>
-          {[v.protectionSummary, v.bulletproofRating]
-            .join('\n')
-            .split('\n')
-            .filter(Boolean)
-            .map((line, i) => (
-              <div key={i} className={BLUE}>
-                {line}
+        <Group>
+          {v.uavRecon && <Row label={<span className={BLUE}>{v.uavName || 'UAV Recon Micro'}</span>}>{v.uavRecon}</Row>}
+          {v.guidanceSpeedHorStock && (
+            <Row label="Guidance Speed:">
+              <div>
+                Hor.: {v.guidanceSpeedHorStock}°/s{isAce && <Ace value={`${v.guidanceSpeedHorAce}°/s`} />}
               </div>
-            ))}
-        </Row>
-      </Group>
-
-      <Group>
-        {v.systems && (
-          <Row label="Systems:" sub={<ViewButton icon="assets/game/svg/btn_dm_viewer_xray.svg" text="X-Ray" onClick={onViewXRay} />}>
-            {v.systems.split('\n').map((line, i) => (
-              <div key={i} className={BLUE}>
-                {items(line.split(/,\s*/).filter(Boolean))}
+              <div>
+                Vert.: {v.guidanceSpeedVertStock}°/s{isAce && <Ace value={`${v.guidanceSpeedVertAce}°/s`} />}
               </div>
-            ))}
-          </Row>
-        )}
-      </Group>
+            </Row>
+          )}
+          {v.verticalGuidance && <Row label="Vertical Guidance:">{v.verticalGuidance}</Row>}
+          {v.fireRate && <Row label="Fire rate:">{v.fireRate}</Row>}
+          {v.reloadingRate && (
+            <Row label="Reloading rate:">
+              {v.reloadingRate}
+              {isAce && v.reloadingRateAce && <Ace value={v.reloadingRateAce} />}
+            </Row>
+          )}
+        </Group>
 
-      <Group>
-        {v.ammoTypes?.length > 0 && (
-          <Row label={`Ammo ${v.ammoCaliber || v.primaryWeapon?.name.match(/^[\d.]+ mm/)?.[0] || ''}:`}>
-            <div className={BLUE}>{items(v.ammoTypes)}</div>
+        <Group>
+          <Row label="Protection:" sub={<ViewButton icon="assets/game/svg/btn_dm_viewer_armor.svg" text="Armor" onClick={onViewArmor} />}>
+            {[v.protectionSummary, v.bulletproofRating]
+              .join('\n')
+              .split('\n')
+              .filter(Boolean)
+              .map((line, i) => (
+                <div key={i} className={BLUE}>
+                  {line}
+                </div>
+              ))}
           </Row>
-        )}
-      </Group>
+        </Group>
 
-      <Group>
-        <Row label="Crew">{v.crew}</Row>
-        <Row label="Mass:">{v.mass}</Row>
-        <Row label={<span className={BLUE}>Engine Power:</span>}>{v.enginePower}</Row>
-        {v.maxSpeedForward && (
-          <Row
-            label={
-              <>
-                <span className={BLUE}>Max speed</span> (forward/reverse):
-              </>
-            }
-          >
-            {v.maxSpeedReverse ? `${v.maxSpeedForward} / ${v.maxSpeedReverse}` : v.maxSpeedForward} km/h
-          </Row>
-        )}
-        {v.visibility && <Row label="Visibility:">{v.visibility}</Row>}
-      </Group>
+        <Group>
+          {v.systems && (
+            <Row label="Systems:" sub={<ViewButton icon="assets/game/svg/btn_dm_viewer_xray.svg" text="X-Ray" onClick={onViewXRay} />}>
+              {v.systems.split('\n').map((line, i) => (
+                <div key={i} className={BLUE}>
+                  {items(line.split(/,\s*/).filter(Boolean))}
+                </div>
+              ))}
+            </Row>
+          )}
+        </Group>
 
-      <Group>
-        {!v.owned && v.requiredRP && (
-          <Row label="Required RP:">
-            {v.requiredRP}
-            <Icon src={RP} />
-          </Row>
-        )}
-        {!v.owned && v.efficientProgressFrom && (
-          <Row
-            label={
-              <>
-                Efficient progress from <span className={GOLD}>{v.efficientProgressFrom}</span>:
-              </>
-            }
-          >
-            <span className={GOLD}>{v.efficientProgressBonus || '110%'}</span>
-          </Row>
-        )}
-        {!v.owned && v.price && (
-          <Row label="Price">
-            <span className={v.cantAfford ? 'text-[#fa4a38]' : ''}>{v.price}</span>
-            <Icon src={v.priceCurrency === 'ge' ? GE : SL} />
-          </Row>
-        )}
-        {v.crewTrainCost && (
-          <Row label="Crew train cost:">
-            {v.crewTrainCost}
-            <Icon src={SL} />
-          </Row>
-        )}
-      </Group>
+        <Group>
+          {v.ammoTypes?.length > 0 && (
+            <Row label={`Ammo${(' ' + (v.ammoCaliber || v.primaryWeapon?.name.match(/^[\d.]+ mm/)?.[0] || '')).trimEnd()}:`}>
+              <div className={BLUE}>{items(v.ammoTypes)}</div>
+            </Row>
+          )}
+        </Group>
 
-      <Group>
-        {v.freeRepairs && <Row label="Free repairs:">{v.freeRepairs}</Row>}
-        {v.repairCostPerMin && (
-          <Row label="Repair cost depending on lifetime:">
-            {v.repairCostPerMin}
-            <Icon src={SL} />
-            /min
-          </Row>
-        )}
-        {v.maxRepairCost && (
-          <Row label="Max repair cost:">
-            {v.maxRepairCost}
-            {v.maxRepairCost !== 'Free' && <Icon src={SL} />}
-          </Row>
-        )}
-        {v.freeRepairTime && (
-          <Row label={v.owned ? 'Free repair time (with crew):' : 'Free repair time:'}>
-            {v.freeRepairTime}
-          </Row>
-        )}
-      </Group>
+        <Group>
+          <Row label="Crew">{v.crew}</Row>
+          <Row label="Mass:">{v.mass}</Row>
+          <Row label={<span className={BLUE}>Engine Power:</span>}>{v.enginePower}</Row>
+          {v.maxSpeedForward && (
+            <Row
+              label={
+                <>
+                  <span className={BLUE}>Max speed</span> (forward/reverse):
+                </>
+              }
+            >
+              {v.maxSpeedReverse ? `${v.maxSpeedForward} / ${v.maxSpeedReverse}` : v.maxSpeedForward} km/h
+            </Row>
+          )}
+          {v.visibility && <Row label="Visibility:">{v.visibility}</Row>}
+        </Group>
 
-      <Group>
-        {v.researchEfficiencyRanks && <Row label="Max vehicle research efficiency:">{v.researchEfficiencyRanks}</Row>}
-        {v.rpRewardPercent && (
-          <Row
-            label={
-              <>
-                Reward <span className={BRIGHT}>{v.rpRewardPercent}</span>
-                <Icon src={RP} />:
-              </>
-            }
-          >
-            {renderRpMultiplier(v.rpMultiplier)}
-          </Row>
-        )}
-        {v.slRewardPercent && (
-          <Row
-            label={
-              <>
-                Reward <span className={BRIGHT}>{v.slRewardPercent}</span>
-                <Icon src={SL} />:
-              </>
-            }
-          >
-            {renderSlMultiplier(v.slMultiplier)}
-          </Row>
-        )}
-      </Group>
+        <Group>
+          {!v.owned && v.requiredRP && (
+            <Row label="Required RP:">
+              {v.requiredRP}
+              <Icon src={RP} />
+            </Row>
+          )}
+          {!v.owned && v.efficientProgressFrom && (
+            <Row
+              label={
+                <>
+                  Efficient progress from <span className={GOLD}>{v.efficientProgressFrom}</span>:
+                </>
+              }
+            >
+              <span className={GOLD}>{v.efficientProgressBonus || '110%'}</span>
+            </Row>
+          )}
+          {!v.owned && v.price && (
+            <Row label="Price">
+              <span className={v.cantAfford ? 'text-[#fa4a38]' : ''}>{v.price}</span>
+              <Icon src={v.priceCurrency === 'ge' ? GE : SL} />
+            </Row>
+          )}
+          {v.crewTrainCost && (
+            <Row label="Crew train cost:">
+              {v.crewTrainCost}
+              <Icon src={SL} />
+            </Row>
+          )}
+        </Group>
+
+        <Group>
+          {v.freeRepairs && <Row label="Free repairs:">{v.freeRepairs}</Row>}
+          {v.repairCostPerMin && (
+            <Row label="Repair cost depending on lifetime:">
+              {v.repairCostPerMin}
+              <Icon src={SL} />
+              /min
+            </Row>
+          )}
+          {v.maxRepairCost && (
+            <Row label="Max repair cost:">
+              {v.maxRepairCost}
+              {v.maxRepairCost !== 'Free' && <Icon src={SL} />}
+            </Row>
+          )}
+          {v.freeRepairTime && (
+            <Row label={v.owned ? 'Free repair time (with crew):' : 'Free repair time:'}>
+              {v.freeRepairTime}
+            </Row>
+          )}
+        </Group>
+
+        <Group>
+          {v.researchEfficiencyRanks && <Row label="Max vehicle research efficiency:">{v.researchEfficiencyRanks}</Row>}
+          {v.rpRewardPercent && (
+            <Row
+              label={
+                <>
+                  Reward <span className={BRIGHT}>{v.rpRewardPercent}</span>
+                  <Icon src={RP} />:
+                </>
+              }
+            >
+              {renderRpMultiplier(v.rpMultiplier)}
+            </Row>
+          )}
+          {v.slRewardPercent && (
+            <Row
+              label={
+                <>
+                  Reward <span className={BRIGHT}>{v.slRewardPercent}</span>
+                  <Icon src={SL} />:
+                </>
+              }
+            >
+              {renderSlMultiplier(v.slMultiplier)}
+            </Row>
+          )}
+        </Group>
+      </div>
 
       <div className={`mt-[6px] ${DIM}`}>
         <div className="text-center">

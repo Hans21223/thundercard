@@ -53,6 +53,7 @@ export interface VehicleData {
   imageX?: number; // px offset, set by dragging the picture on the card
   imageY?: number;
   flagBackdropOpacity: number;
+  labelWidth?: number; // px, label column of the In-game card (the game's is 218)
   flagBackdropScale?: number;
   
   // Status & Badges

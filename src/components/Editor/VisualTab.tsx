@@ -49,6 +49,23 @@ export const VisualTab: React.FC<VisualTabProps> = ({ vehicle, onChange, onOpenF
             </button>
           ))}
         </div>
+        {vehicle.cardLayout !== 'legacy' && (
+          <label
+            className="grid grid-cols-[90px_1fr_48px] items-center gap-2 mt-2 text-[12px] text-[#8a939b]"
+            data-tip="Where the values start. The game's is 218 px; you can also drag the dashed line on the card"
+          >
+            Label column
+            <input
+              type="range"
+              min="120"
+              max="330"
+              value={vehicle.labelWidth ?? 218}
+              onChange={(e) => onChange({ labelWidth: +e.target.value })}
+              className="accent-[#9cc6de]"
+            />
+            <span className="text-right text-[#c0c0c0]">{vehicle.labelWidth ?? 218} px</span>
+          </label>
+        )}
       </div>
 
       <div className="ui-section">

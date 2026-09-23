@@ -23,28 +23,34 @@ const committed = (tx: IDBTransaction) =>
   });
 
 export async function initStorage(): Promise<void> {
-  try {
+  // Some browsers have left indexedDB.open unanswered: after a few seconds this visit uses localStorage
+  let late = false;
+  const load = async () => {
     const open = indexedDB.open('thundercard', 1);
     open.onupgradeneeded = () => open.result.createObjectStore(STORE);
     const opened = await done(open);
     const store = opened.transaction(STORE).objectStore(STORE);
     const [keys, values] = await Promise.all([done(store.getAllKeys()), done(store.getAll())]);
     keys.forEach((k, i) => cache.set(String(k), values[i]));
-    // First run: move the saves over from localStorage, and free it only once they are safely stored
-    const old = Object.keys(localStorage).filter((k) => k.startsWith('thundercard_') && !cache.has(k));
+    // Move saves over from localStorage (the first visit, or one that fell back to it: those are newer),
+    // and free it only once they are safely stored
+    const old = Object.keys(localStorage).filter((k) => k.startsWith('thundercard_'));
+    if (late) return;
     if (old.length) {
       const tx = opened.transaction(STORE, 'readwrite');
       for (const k of old) tx.objectStore(STORE).put(localStorage.getItem(k), k);
       await committed(tx);
+      if (late) return;
       for (const k of old) {
         cache.set(k, localStorage.getItem(k)!);
         localStorage.removeItem(k);
       }
     }
     db = opened;
-  } catch (e) {
-    console.error('IndexedDB unavailable, saving to localStorage instead:', e);
-  }
+  };
+  const giveUp = new Promise<void>((ok) => setTimeout(ok, 4000));
+  await Promise.race([load().catch((e) => console.error('IndexedDB unavailable, saving to localStorage instead:', e)), giveUp]);
+  late = true;
 }
 
 let warned = false;
