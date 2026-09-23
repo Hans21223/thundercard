@@ -2,15 +2,18 @@ import React, { useState, useRef } from 'react';
 import { VehicleData } from '../types/vehicle';
 import { exportCardAsPng, exportCardAsJpeg, copyCardToClipboard } from '../utils/exportImage';
 import { downloadVehicleJson, parseVehicleJson } from '../utils/storage';
+import { cardLink } from '../utils/share';
 
 interface ExportBarProps {
   vehicle: VehicleData;
   onImportJson: (imported: VehicleData) => void;
   onResetToDefault: () => void;
+  pixelRatio: number; // Settings → Export size
 }
 
-export const ExportBar: React.FC<ExportBarProps> = ({ vehicle, onImportJson, onResetToDefault }) => {
+export const ExportBar: React.FC<ExportBarProps> = ({ vehicle, onImportJson, onResetToDefault, pixelRatio }) => {
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -30,10 +33,20 @@ export const ExportBar: React.FC<ExportBarProps> = ({ vehicle, onImportJson, onR
 
   const handleCopy = () =>
     run(async () => {
-      if (!(await copyCardToClipboard('statcard-preview-target'))) throw new Error();
+      if (!(await copyCardToClipboard('statcard-preview-target', pixelRatio))) throw new Error();
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }, 'Could not copy the image. Try Save PNG instead.');
+
+  const handleLink = () =>
+    run(async () => {
+      const { url, picturesLeftOut } = await cardLink(vehicle);
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+      if (picturesLeftOut)
+        alert('Link copied. Your uploaded picture or flag is too big for a link, so it is left out: share a Save JSON file to include it.');
+    }, 'Could not copy the link.');
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -53,7 +66,7 @@ export const ExportBar: React.FC<ExportBarProps> = ({ vehicle, onImportJson, onR
       </button>
       <button
         type="button"
-        onClick={() => run(() => exportCardAsPng('statcard-preview-target', filename('png')), 'Could not export the image.')}
+        onClick={() => run(() => exportCardAsPng('statcard-preview-target', filename('png'), pixelRatio), 'Could not export the image.')}
         disabled={exporting}
         className="ui-btn"
       >
@@ -61,13 +74,16 @@ export const ExportBar: React.FC<ExportBarProps> = ({ vehicle, onImportJson, onR
       </button>
       <button
         type="button"
-        onClick={() => run(() => exportCardAsJpeg('statcard-preview-target', filename('jpg')), 'Could not export the image.')}
+        onClick={() => run(() => exportCardAsJpeg('statcard-preview-target', filename('jpg'), pixelRatio), 'Could not export the image.')}
         disabled={exporting}
         className="ui-btn"
       >
         Save JPG
       </button>
       <span className="w-px h-5 bg-[#353e47] mx-1" />
+      <button type="button" onClick={handleLink} disabled={exporting} className="ui-btn" data-tip="A link that opens this card for anyone">
+        {linkCopied ? 'Link copied' : 'Copy link'}
+      </button>
       <button type="button" onClick={() => downloadVehicleJson(vehicle)} className="ui-btn" title="Save this card as a JSON file">
         Save JSON
       </button>

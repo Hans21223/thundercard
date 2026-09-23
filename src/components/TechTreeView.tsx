@@ -1,14 +1,17 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { GameMode, VehicleData, VehicleClass } from '../types/vehicle';
 import { GameCatalog, GameVehicle, gameToVehicle, loadGameCatalog } from '../data/gameVehicles';
 import { CLASS_METAS } from './StatCard/CardHeader';
 import { ModernStatCard } from './StatCard/ModernStatCard';
 import { LegacyStatCard } from './StatCard/LegacyStatCard';
-import { exportCardAsPng } from '../utils/exportImage';
+import { cardPng, exportCardAsPng } from '../utils/exportImage';
+import { zip } from '../utils/zip';
 import { downloadJson, loadJson, saveJson } from '../utils/storage';
 import { FLAGS } from '../data/flags';
 import { PromptDialog, PromptRequest } from './PromptDialog';
 import { Nation, NationPrefs, NationsDialog, EMPTY_PREFS, orderNations } from './NationsDialog';
+import { CardShelf } from './CardShelf';
 
 // My tree: same shape as the game's — columns of entries; a folder entry holds several cards.
 export interface MyTreeEntry {
@@ -209,7 +212,9 @@ const TreeCanvas: React.FC<{
   onMove?: (from: NodePath, to: DropTarget) => void;
   // Stat card on hover: the hovered vehicle and its tile's place on screen (null when the pointer leaves)
   onHover?: (hover: { path: NodePath; rect: DOMRect } | null) => void;
-}> = ({ columns, premium, selected, onPick, onOpen, editable, selectedCol, onPickColumn, onMove, onHover }) => {
+  incoming?: boolean; // a card from the sidebar is being dragged over
+  onDropNew?: (to: DropTarget) => void;
+}> = ({ columns, premium, selected, onPick, onOpen, editable, selectedCol, onPickColumn, onMove, onHover, incoming, onDropNew }) => {
   const hoverOf = (path: NodePath) => onHover && ((rect: DOMRect | null) => onHover(rect && { path, rect }));
   // Hover tip: the tile's name and what the mouse does with it
   const tipOf = (name: string, folder: boolean, drag: boolean) =>
@@ -223,6 +228,9 @@ const TreeCanvas: React.FC<{
   const [open, setOpen] = useState<string | null>(null); // folder "c:e" whose members are shown
   const [drag, setDrag] = useState<NodePath | null>(null);
   const [drop, setDrop] = useState<DropTarget | null>(null);
+  useEffect(() => {
+    if (!incoming) setDrop(null); // the sidebar drag ended somewhere else
+  }, [incoming]);
 
   // Column x positions: researchable columns, then premium ones after a divider
   const order = [...columns.keys()].sort((a, b) => Number(premium.has(a)) - Number(premium.has(b)) || a - b);
@@ -286,7 +294,7 @@ const TreeCanvas: React.FC<{
       style={{ width, height: y + 12, background: 'radial-gradient(ellipse at 50% 30%,#2a333b,#171c21 70%)' }}
       onClick={() => setOpen(null)}
       onDragOver={(e) => {
-        if (!drag) return;
+        if (!drag && !incoming) return;
         e.preventDefault();
         const t = targetAt(e);
         if (t?.col !== drop?.col || t?.rank !== drop?.rank || t?.slot !== drop?.slot) setDrop(t);
@@ -295,6 +303,7 @@ const TreeCanvas: React.FC<{
         e.preventDefault();
         const t = targetAt(e);
         if (drag && t) onMove?.(drag, t);
+        else if (incoming && t) onDropNew?.(t);
         setDrag(null);
         setDrop(null);
       }}
@@ -465,6 +474,7 @@ interface TechTreeViewProps {
   onChangeMyTree: (t: MyTree, replaced?: boolean) => void; // replaced: a different tree, not an edit of this one
   onOpenCard: (card: VehicleData, editPath?: NodePath) => void;
   hoverCards: boolean; // stat card pops up when hovering a vehicle (Settings)
+  exportScale: number; // Settings → Export size
 }
 
 export const TechTreeView: React.FC<TechTreeViewProps> = ({
@@ -476,6 +486,7 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
   onChangeMyTree,
   onOpenCard,
   hoverCards,
+  exportScale,
 }) => {
   const [data, setData] = useState<GameCatalog | null>(null);
   const [error, setError] = useState('');
@@ -547,12 +558,12 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
 
   const isPrem = (ci: number) => !!myTree.premium?.includes(ci);
 
-  const addCurrent = () => {
+  const addCard = (card: VehicleData) => {
     // Into the selection, else the selected column, else the first researchable one
     const base = cols.length ? cols : [[]];
     const firstResearch = base.findIndex((_, ci) => !isPrem(ci));
     const target = sel?.[0] ?? selCol ?? (firstResearch < 0 ? 0 : firstResearch);
-    const entry = intoSection({ cards: [{ ...currentCard }], link: false }, isPrem(target));
+    const entry = intoSection({ cards: [structuredClone(card)], link: false }, isPrem(target));
     if (sel && selIsFolder) {
       mapEntry((en) => ({ ...en, cards: [...en.cards, ...entry.cards] }));
       return;
@@ -589,6 +600,37 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
       setSel([to, at, sel[2]]);
     }
   };
+
+  // A copy right after the selection (inside the folder when one of its vehicles is selected)
+  const duplicate = () => {
+    if (!sel || !selEntry) return;
+    const [c, e, i] = sel;
+    const copy = (cd: VehicleData): VehicleData => ({ ...structuredClone(cd), id: `${cd.id}_copy_${Date.now()}` });
+    if (selIsFolder && i >= 0) {
+      mapEntry((en) => ({ ...en, cards: [...en.cards.slice(0, i + 1), copy(en.cards[i]), ...en.cards.slice(i + 1)] }));
+      setSel([c, e, i + 1]);
+      return;
+    }
+    const twin = { ...selEntry, cards: selEntry.cards.map(copy), link: !isPrem(c) };
+    setCols(cols.map((col, ci) => (ci !== c ? col : [...col.slice(0, e + 1), twin, ...col.slice(e + 1)])));
+    setSel([c, e + 1, i]);
+  };
+
+  // My tree keys for the selected vehicle: Delete removes, arrows move, Ctrl+D duplicates (not while typing)
+  useEffect(() => {
+    const MOVES: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    const onKey = (e: KeyboardEvent) => {
+      if (mode !== 'mine' || !sel || (e.target as HTMLElement).closest('input, textarea, select') || document.querySelector('.ui-modal')) return;
+      const ctrl = e.ctrlKey || e.metaKey;
+      if (e.key === 'Delete') removeSelected();
+      else if (MOVES[e.key] && !ctrl) moveEntry(...MOVES[e.key]);
+      else if (ctrl && e.key.toLowerCase() === 'd') duplicate();
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   const removeSelected = () => {
     if (!sel || !selEntry) return;
@@ -655,9 +697,16 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
   };
 
   // Drag and drop: the vehicle takes the rank of the row it is dropped in
-  const moveTo = ([c, e]: NodePath, to: { col: number; rank: number; slot: number }) => {
+  const moveTo = ([c, e]: NodePath, to: DropTarget) => {
     const next = cols.map((col) => [...col]);
     const [entry] = next[c].splice(e, 1);
+    insertAt(next, entry, to);
+  };
+  // A card dragged in from the sidebar
+  const [incoming, setIncoming] = useState<VehicleData | null>(null);
+  const dropNew = (to: DropTarget) =>
+    incoming && insertAt(cols.map((col) => [...col]), { cards: [structuredClone(incoming)], link: true }, to);
+  const insertAt = (next: MyTreeEntry[][], entry: MyTreeEntry, to: DropTarget) => {
     const moved = intoSection({ ...entry, cards: entry.cards.map((cd) => ({ ...cd, rank: ROMAN[to.rank] })) }, isPrem(to.col));
     const target = next[to.col];
     const sameRank = target.flatMap((en, i) => (rankNum(en.cards[0]?.rank) === to.rank ? [i] : []));
@@ -711,6 +760,37 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
   };
 
   const safeName = (myTree.name || 'tree').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+
+  // Save all cards: every vehicle of the tree on screen rendered as its stat card (off screen), one PNG each, zipped
+  const [exporting, setExporting] = useState<{ card: VehicleData; done: number; total: number } | null>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
+  const saveAllCards = async () => {
+    const all = mode === 'mine' ? cols.flat().flatMap((e) => e.cards) : gameTree.flat().flatMap((e) => e.ids.map(card));
+    const files: { name: string; data: Uint8Array<ArrayBuffer> }[] = [];
+    const used = new Set<string>();
+    try {
+      for (const [i, c] of all.entries()) {
+        flushSync(() => setExporting({ card: c, done: i, total: all.length }));
+        const node = exportRef.current!.firstElementChild as HTMLElement;
+        await Promise.all(
+          [...node.querySelectorAll('img')].map((img) => img.complete || new Promise((done) => (img.onload = img.onerror = done)))
+        );
+        const blob = await cardPng(node, exportScale);
+        const base = (c.name || 'card').replace(/[\\/:*?"<>|]/g, '_');
+        let name = base;
+        for (let n = 2; used.has(name); n++) name = `${base} (${n})`;
+        used.add(name);
+        files.push({ name: `${name}.png`, data: new Uint8Array(await blob!.arrayBuffer()) });
+      }
+      const url = URL.createObjectURL(zip(files));
+      const zipName = mode === 'mine' ? safeName : nationName(country).replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+      Object.assign(document.createElement('a'), { href: url, download: `${zipName}_cards.zip` }).click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      alert('Could not render the cards.');
+    }
+    setExporting(null);
+  };
   const activeCountry = mode === 'game' ? country : myTree.country;
 
   const hoverPath = hover?.path ?? [-1, -1, -1];
@@ -721,6 +801,11 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      {exporting && (
+        <div ref={exportRef} className="fixed left-[-10000px] top-0" aria-hidden>
+          {exporting.card.cardLayout === 'legacy' ? <LegacyStatCard vehicle={exporting.card} /> : <ModernStatCard vehicle={exporting.card} />}
+        </div>
+      )}
       {hover && hoverCard && (
         <HoverCard
           card={hoverCard}
@@ -755,6 +840,15 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
           Customize…
         </button>
         <div className="flex-1" />
+        <button
+          type="button"
+          onClick={saveAllCards}
+          disabled={!!exporting || (mode === 'mine' ? !cols.flat().length : !gameTree.length)}
+          className="ui-btn"
+          data-tip="Every vehicle in this tree as its own stat card PNG, in one zip"
+        >
+          {exporting ? `Saving ${exporting.done + 1} / ${exporting.total}…` : 'Save all cards'}
+        </button>
         {mode === 'mine' && (
           <>
             <button type="button" onClick={newTree} className="ui-btn" title="Start a new empty tree">
@@ -783,7 +877,7 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
 
       {mode === 'mine' && (
         <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-[#353e47] bg-[#1b1f24] text-[12px]">
-          <button type="button" onClick={addCurrent} className="ui-btn-primary" title="Add the card open in the editor">
+          <button type="button" onClick={() => addCard(currentCard)} className="ui-btn-primary" title="Add the card open in the editor">
             {selIsFolder ? 'Add current card to folder' : 'Add current card'}
           </button>
           <button type="button" onClick={addColumn} className="ui-btn" title="Adds a column after the selected one">
@@ -811,17 +905,20 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
                   Edit card
                 </button>
               )}
-              <button type="button" onClick={() => moveEntry(-1, 0)} className="ui-btn" title="Move to the column on the left">
+              <button type="button" onClick={() => moveEntry(-1, 0)} className="ui-btn" data-tip="Move to the column on the left (←)">
                 Left
               </button>
-              <button type="button" onClick={() => moveEntry(1, 0)} className="ui-btn" title="Move to the column on the right">
+              <button type="button" onClick={() => moveEntry(1, 0)} className="ui-btn" data-tip="Move to the column on the right (→)">
                 Right
               </button>
-              <button type="button" onClick={() => moveEntry(0, -1)} className="ui-btn">
+              <button type="button" onClick={() => moveEntry(0, -1)} className="ui-btn" data-tip="Move up (↑)">
                 Up
               </button>
-              <button type="button" onClick={() => moveEntry(0, 1)} className="ui-btn">
+              <button type="button" onClick={() => moveEntry(0, 1)} className="ui-btn" data-tip="Move down (↓)">
                 Down
+              </button>
+              <button type="button" onClick={duplicate} className="ui-btn" data-tip="A copy right after it (Ctrl+D)">
+                Duplicate
               </button>
               <label className="flex items-center gap-1.5 px-1">
                 <input type="checkbox" checked={selEntry.link} onChange={(e) => mapEntry((en) => ({ ...en, link: e.target.checked }))} className="ui-check" />
@@ -866,7 +963,7 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
               <button type="button" onClick={putInFolderAbove} className="ui-btn" disabled={sel![1] === 0}>
                 Put in folder above
               </button>
-              <button type="button" onClick={removeSelected} className="ui-btn hover:!text-[#f02020]">
+              <button type="button" onClick={removeSelected} className="ui-btn hover:!text-[#f02020]" data-tip="Remove (Delete)">
                 Remove
               </button>
             </>
@@ -874,60 +971,65 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
         </div>
       )}
 
-      <div
-        className="flex-1 overflow-auto bg-[#101316]"
-        onClick={() => {
-          setSel(null);
-          setSelCol(null);
-        }}
-      >
-        {error && <div className="p-4 text-[#f02020]">{error}</div>}
-        {!data && !error && <div className="p-4">Loading…</div>}
-        {data && mode === 'game' && !data.trees[country] && (
-          <div className="px-4 py-3 text-[13px]">
-            {nationName(country)} is your own nation, so it has no game tree. Switch to <b className="text-[#f0f0f0]">My tree</b> to build one.
-          </div>
-        )}
-        {data && mode === 'game' && data.trees[country] && (
-          <TreeCanvas
-            columns={gameColumns}
-            premium={gamePremium}
-            onPick={([c, e, i]) => i >= 0 && onOpenCard(card(gameTree[c][e].ids[i]))}
-            onOpen={([c, e, i]) => onOpenCard(card(gameTree[c][e].ids[i]))}
-            onHover={hoverCards ? setHover : undefined}
-          />
-        )}
-        {mode === 'mine' && (
-          <>
-            {!cols.flat().length && (
-              <div className="px-4 py-3 max-w-xl text-[13px] leading-relaxed">
-                Your tree is empty. <b className="text-[#f0f0f0]">Add current card</b> puts the card from the editor here, or{' '}
-                <b className="text-[#f0f0f0]">Copy game tree</b> starts from the selected nation's real tree. Drag vehicles to move
-                them; the row you drop into sets the rank.
-              </div>
-            )}
-            {cols.length > 0 && (
-              <TreeCanvas
-                columns={myColumns}
-                premium={new Set(myTree.premium ?? [])}
-                selected={sel}
-                onPick={(p) => {
-                  setSel(p);
-                  setSelCol(p[0]);
-                }}
-                editable
-                selectedCol={selCol}
-                onPickColumn={(ci) => {
-                  setSel(null);
-                  setSelCol(ci);
-                }}
-                onMove={moveTo}
-                onHover={hoverCards ? setHover : undefined}
-                onOpen={([c, e, i]) => onOpenCard(cols[c][e].cards[i], [c, e, i])}
-              />
-            )}
-          </>
-        )}
+      <div className="flex-1 flex min-h-0">
+        <div
+          className="flex-1 overflow-auto bg-[#101316]"
+          onClick={() => {
+            setSel(null);
+            setSelCol(null);
+          }}
+        >
+          {error && <div className="p-4 text-[#f02020]">{error}</div>}
+          {!data && !error && <div className="p-4">Loading…</div>}
+          {data && mode === 'game' && !data.trees[country] && (
+            <div className="px-4 py-3 text-[13px]">
+              {nationName(country)} is your own nation, so it has no game tree. Switch to <b className="text-[#f0f0f0]">My tree</b> to build one.
+            </div>
+          )}
+          {data && mode === 'game' && data.trees[country] && (
+            <TreeCanvas
+              columns={gameColumns}
+              premium={gamePremium}
+              onPick={([c, e, i]) => i >= 0 && onOpenCard(card(gameTree[c][e].ids[i]))}
+              onOpen={([c, e, i]) => onOpenCard(card(gameTree[c][e].ids[i]))}
+              onHover={hoverCards ? setHover : undefined}
+            />
+          )}
+          {mode === 'mine' && (
+            <>
+              {!cols.flat().length && (
+                <div className="px-4 py-3 max-w-xl text-[13px] leading-relaxed">
+                  Your tree is empty. <b className="text-[#f0f0f0]">Add current card</b> puts the card from the editor here, or{' '}
+                  <b className="text-[#f0f0f0]">Copy game tree</b> starts from the selected nation's real tree. Drag vehicles to move
+                  them; the row you drop into sets the rank.
+                </div>
+              )}
+              {cols.length > 0 && (
+                <TreeCanvas
+                  columns={myColumns}
+                  premium={new Set(myTree.premium ?? [])}
+                  selected={sel}
+                  onPick={(p) => {
+                    setSel(p);
+                    setSelCol(p[0]);
+                  }}
+                  editable
+                  selectedCol={selCol}
+                  onPickColumn={(ci) => {
+                    setSel(null);
+                    setSelCol(ci);
+                  }}
+                  onMove={moveTo}
+                  onHover={hoverCards ? setHover : undefined}
+                  onOpen={([c, e, i]) => onOpenCard(cols[c][e].cards[i], [c, e, i])}
+                  incoming={!!incoming}
+                  onDropNew={dropNew}
+                />
+              )}
+            </>
+          )}
+        </div>
+        {mode === 'mine' && <CardShelf current={currentCard} onAdd={addCard} onDragCard={setIncoming} />}
       </div>
     </div>
   );

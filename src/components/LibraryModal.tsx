@@ -20,13 +20,13 @@ interface Library<T> {
 }
 type Kind = 'cards' | 'trees';
 const KEY: Record<Kind, string> = { cards: 'thundercard_lib_cards', trees: 'thundercard_lib_trees' };
-const load = <T,>(kind: Kind): Library<T> => loadJson<Library<T>>(KEY[kind]) ?? { folders: [], items: [] };
+export const loadLibrary = <T,>(kind: Kind): Library<T> => loadJson<Library<T>>(KEY[kind]) ?? { folders: [], items: [] };
 
 // Auto-save: writes data into library item `id`, or makes a new save in the Autosave folder (newest 30 kept).
 // Returns the item id, or null when browser storage is full.
 export const AUTOSAVE = 'Autosave';
 export function autoSave<T>(kind: Kind, id: string | null, name: string, data: T): string | null {
-  const lib = load<T>(kind);
+  const lib = loadLibrary<T>(kind);
   const now = Date.now();
   let items = lib.items;
   if (id && items.some((it) => it.id === id)) {
@@ -53,9 +53,10 @@ interface LibraryModalProps {
 
 export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, card, tree, onOpenCard, onOpenTree, onSaved, onClose }) => {
   const [tab, setTab] = useState<Kind>(initialTab);
-  const [libs, setLibs] = useState({ cards: load<VehicleData>('cards'), trees: load<MyTree>('trees') });
+  const [libs, setLibs] = useState({ cards: loadLibrary<VehicleData>('cards'), trees: loadLibrary<MyTree>('trees') });
   const [saveName, setSaveName] = useState('');
   const [saveFolder, setSaveFolder] = useState('');
+  const [query, setQuery] = useState('');
   const [ask, setAsk] = useState<PromptRequest | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -65,8 +66,9 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, 
     setWasOpen(isOpen);
     if (isOpen) {
       setTab(initialTab);
-      setLibs({ cards: load<VehicleData>('cards'), trees: load<MyTree>('trees') }); // auto-save may have written since
+      setLibs({ cards: loadLibrary<VehicleData>('cards'), trees: loadLibrary<MyTree>('trees') }); // auto-save may have written since
       setSaveName('');
+      setQuery('');
     }
   }
   if (!isOpen) return null;
@@ -143,8 +145,13 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, 
     onClose();
   };
 
+  const picture = (data: VehicleData | MyTree) =>
+    'columns' in data ? data.columns.flat().flatMap((e) => e.cards).find((c) => c.vehicleImage)?.vehicleImage : data.vehicleImage;
+  const thumb = (src?: string) =>
+    src ? <img src={src} alt="" loading="lazy" className="w-16 h-8 object-contain shrink-0" /> : <span className="w-16 h-8 shrink-0" />;
   const row = (it: LibItem<VehicleData | MyTree>) => (
     <div key={it.id} className="flex items-center gap-2 px-2 py-1.5 border-b border-[#2a3239] hover:bg-[#252b31]">
+      {thumb(picture(it.data))}
       <button type="button" onClick={() => open(it.data, it.id)} className="flex-1 min-w-0 text-left">
         <div className="truncate text-[13px] text-[#f0f0f0]">{it.name}</div>
         <div className="text-[11px] text-[#8a939b]">{new Date(it.saved).toLocaleString()}</div>
@@ -208,7 +215,10 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, 
     </div>
   );
 
-  const loose = lib.items.filter((it) => !it.folder || !lib.folders.includes(it.folder));
+  const matches = (name: string) => name.toLowerCase().includes(query.trim().toLowerCase());
+  const found = lib.items.filter((it) => matches(it.name));
+  const loose = found.filter((it) => !it.folder || !lib.folders.includes(it.folder));
+  const presets = VEHICLE_PRESETS.filter((p) => matches(p.name));
 
   return (
     <div className="ui-modal" onClick={onClose}>
@@ -221,6 +231,13 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, 
               {k === 'cards' ? `Vehicles (${libs.cards.items.length})` : `Tech trees (${libs.trees.items.length})`}
             </button>
           ))}
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search"
+            className="ui-input !w-44 ml-2"
+          />
           <div className="flex-1" />
           <button type="button" onClick={() => downloadJson(lib, `thundercard_${tab === 'cards' ? 'vehicles' : 'trees'}.json`)} className="ui-btn" title="Download this library as a file">
             Export
@@ -266,8 +283,10 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, 
             </div>
           )}
           {loose.length > 0 && <div className="mt-2">{loose.map(row)}</div>}
+          {query && !found.length && !presets.length && <div className="py-6 text-[13px] text-[#8a939b]">No saves match "{query}".</div>}
           {lib.folders.map((f) => {
-            const inFolder = lib.items.filter((it) => it.folder === f);
+            const inFolder = found.filter((it) => it.folder === f);
+            if (query && !inFolder.length) return null;
             return (
               <div key={f}>
                 {folderHead(f, inFolder.length, true)}
@@ -275,17 +294,18 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, 
               </div>
             );
           })}
-          {tab === 'cards' && (
+          {tab === 'cards' && presets.length > 0 && (
             <div>
-              {folderHead('Built-in presets', VEHICLE_PRESETS.length, false)}
-              {VEHICLE_PRESETS.map((p) => (
+              {folderHead('Built-in presets', presets.length, false)}
+              {presets.map((p) => (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => open(p)}
-                  className="w-full text-left px-2 py-1.5 border-b border-[#2a3239] hover:bg-[#252b31] text-[13px] text-[#f0f0f0] truncate"
+                  className="w-full flex items-center gap-2 text-left px-2 py-1.5 border-b border-[#2a3239] hover:bg-[#252b31] text-[13px] text-[#f0f0f0]"
                 >
-                  {p.name}
+                  {thumb(p.vehicleImage)}
+                  <span className="truncate">{p.name}</span>
                 </button>
               ))}
             </div>

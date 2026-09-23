@@ -1,6 +1,7 @@
 import { toPng, toJpeg, toBlob } from 'html-to-image';
 
-export async function exportCardAsPng(elementId: string, filename = 'statcard.png'): Promise<void> {
+// pixelRatio: export size (Settings → Export size: 1×, 2× or 4× the on-screen card)
+export async function exportCardAsPng(elementId: string, filename = 'statcard.png', pixelRatio = 2): Promise<void> {
   const element = document.getElementById(elementId);
   if (!element) {
     throw new Error(`Element #${elementId} not found`);
@@ -8,7 +9,7 @@ export async function exportCardAsPng(elementId: string, filename = 'statcard.pn
 
   const dataUrl = await toPng(element, {
     quality: 1.0,
-    pixelRatio: 2, // 2x DPI for crisp high-resolution renders
+    pixelRatio,
     cacheBust: true,
   });
 
@@ -18,7 +19,7 @@ export async function exportCardAsPng(elementId: string, filename = 'statcard.pn
   link.click();
 }
 
-export async function exportCardAsJpeg(elementId: string, filename = 'statcard.jpg'): Promise<void> {
+export async function exportCardAsJpeg(elementId: string, filename = 'statcard.jpg', pixelRatio = 2): Promise<void> {
   const element = document.getElementById(elementId);
   if (!element) {
     throw new Error(`Element #${elementId} not found`);
@@ -26,7 +27,7 @@ export async function exportCardAsJpeg(elementId: string, filename = 'statcard.j
 
   const dataUrl = await toJpeg(element, {
     quality: 0.95,
-    pixelRatio: 2,
+    pixelRatio,
     backgroundColor: '#161a1e',
     cacheBust: true,
   });
@@ -37,7 +38,7 @@ export async function exportCardAsJpeg(elementId: string, filename = 'statcard.j
   link.click();
 }
 
-export async function copyCardToClipboard(elementId: string): Promise<boolean> {
+export async function copyCardToClipboard(elementId: string, pixelRatio = 2): Promise<boolean> {
   const element = document.getElementById(elementId);
   if (!element) {
     throw new Error(`Element #${elementId} not found`);
@@ -45,7 +46,7 @@ export async function copyCardToClipboard(elementId: string): Promise<boolean> {
 
   try {
     const blob = await toBlob(element, {
-      pixelRatio: 2,
+      pixelRatio,
       cacheBust: true,
     });
 
@@ -74,3 +75,10 @@ export async function shrinkImage(file: Blob, maxW: number, maxH: number, type =
   canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL(type, 0.9);
 }
+
+// A vehicle picture from an uploaded / pasted / dropped file: big enough for a 4× export of the card's
+// picture box, small enough that saves don't fill the browser's storage
+export const vehiclePicture = (file: Blob) => shrinkImage(file, 1600, 800, 'image/webp');
+
+// One rendered card as PNG data, for the tree's "Save all cards"
+export const cardPng = (node: HTMLElement, pixelRatio: number) => toBlob(node, { pixelRatio, cacheBust: true });

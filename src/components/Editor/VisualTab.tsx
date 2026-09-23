@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { VehicleData } from '../../types/vehicle';
 import { ImageEditor } from '../ImageEditor';
+import { vehiclePicture } from '../../utils/exportImage';
 
 interface VisualTabProps {
   vehicle: VehicleData;
@@ -11,12 +12,10 @@ interface VisualTabProps {
 export const VisualTab: React.FC<VisualTabProps> = ({ vehicle, onChange, onOpenFlagPicker }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => reader.result && onChange({ vehicleImage: reader.result as string });
-    reader.readAsDataURL(file);
+    e.target.value = '';
+    if (file) onChange({ vehicleImage: await vehiclePicture(file) });
   };
 
   // Picture size as width / height scale, the same numbers the card's transform box changes
@@ -60,7 +59,12 @@ export const VisualTab: React.FC<VisualTabProps> = ({ vehicle, onChange, onOpenF
           </div>
           <div className="flex-1 space-y-2">
             <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
-            <button type="button" onClick={() => fileInputRef.current?.click()} className="ui-btn">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="ui-btn"
+              data-tip="Or paste (Ctrl+V) or drop a picture onto the card"
+            >
               Upload image…
             </button>
             <input

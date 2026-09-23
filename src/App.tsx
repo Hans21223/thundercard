@@ -17,6 +17,8 @@ import { SettingsModal } from './components/SettingsModal';
 import { SprocketModal } from './components/SprocketModal';
 import { loadVehicleFromStorage, saveVehicleToStorage, loadJson, saveJson } from './utils/storage';
 import { FORMATTERS } from './utils/format';
+import { vehiclePicture } from './utils/exportImage';
+import { cardFromLink } from './utils/share';
 
 type EditorTab = 'general' | 'weapons' | 'protection' | 'economy' | 'visual';
 
@@ -91,6 +93,9 @@ export const App: React.FC = () => {
   const [autoFormat, setAutoFormat] = useState(() => loadJson<boolean>('thundercard_autoformat') ?? true);
   const [autoSaveOn, setAutoSaveOn] = useState(() => loadJson<boolean>('thundercard_autosave') ?? true);
   const [hoverCards, setHoverCards] = useState(() => loadJson<boolean>('thundercard_hover_cards') ?? true);
+  const [exportScale, setExportScale] = useState(() => loadJson<number>('thundercard_export_scale') ?? 2);
+  const [saveNote, setSaveNote] = useState<'' | 'saving' | 'saved' | 'full'>(''); // auto-save status in the header
+  const [dropping, setDropping] = useState(false); // a picture file is dragged over the card
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -108,6 +113,9 @@ export const App: React.FC = () => {
   useEffect(() => {
     saveJson('thundercard_hover_cards', hoverCards);
   }, [hoverCards]);
+  useEffect(() => {
+    saveJson('thundercard_export_scale', exportScale);
+  }, [exportScale]);
 
   // Auto-save: edits go into the Library save the card / tree was opened from, or once edited,
   // into a new save in the Library's Autosave folder. Pending edits are flushed before anything replaces them.
@@ -124,14 +132,20 @@ export const App: React.FC = () => {
         kind === 'cards'
           ? autoSave(kind, saveIds.current.cards, vehicle.name, vehicle)
           : autoSave(kind, saveIds.current.trees, myTree.name, myTree);
-      if (id) saveIds.current[kind] = id;
-      else if (!warnedFull.current) {
+      if (id) {
+        saveIds.current[kind] = id;
+        setSaveNote('saved');
+        continue;
+      }
+      setSaveNote('full');
+      if (!warnedFull.current) {
         warnedFull.current = true;
         alert('Auto-save stopped: browser storage is full. Export or delete some saves in the Library.');
       }
     }
   };
   useEffect(() => {
+    if (autoSaveOn && (dirty.current.cards || dirty.current.trees)) setSaveNote('saving');
     const t = setTimeout(flush, 1000);
     return () => clearTimeout(t);
   }, [vehicle, myTree, autoSaveOn]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -195,6 +209,36 @@ export const App: React.FC = () => {
     setView('card');
   };
 
+  // A shared "#card=…" link opens that card (the address is cleaned so a reload keeps your edits)
+  const loadCardRef = useRef(loadCard);
+  loadCardRef.current = loadCard;
+  useEffect(() => {
+    const openLink = async () => {
+      const card = await cardFromLink(location.hash);
+      if (!card) return;
+      history.replaceState(null, '', location.pathname + location.search);
+      loadCardRef.current({ ...BLANK, ...card });
+    };
+    openLink();
+    window.addEventListener('hashchange', openLink);
+    return () => window.removeEventListener('hashchange', openLink);
+  }, []);
+
+  // Paste (Ctrl+V) or drop a picture: it becomes the card's vehicle picture
+  const takePicture = async (file?: File) => {
+    if (file?.type.startsWith('image/')) updateVehicle({ vehicleImage: await vehiclePicture(file) });
+  };
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'));
+      if (view !== 'card' || !file) return;
+      e.preventDefault();
+      takePicture(file);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  });
+
   return (
     <div className="min-h-screen lg:h-screen flex flex-col bg-[#16191d] font-ptsans text-[14px]">
       <header className="flex flex-wrap items-center gap-2 px-3 py-1.5 border-b border-[#353e47] bg-[#1e2328]">
@@ -234,6 +278,14 @@ export const App: React.FC = () => {
         <button type="button" onClick={() => setSettingsOpen(true)} className="ui-btn">
           Settings…
         </button>
+        {autoSaveOn && saveNote && (
+          <span
+            className={`text-[12px] ${saveNote === 'full' ? 'text-[#fa4a38]' : 'text-[#8a939b]'}`}
+            data-tip="Auto-save writes your edits into the Library"
+          >
+            {{ saving: 'Saving…', saved: 'Saved ✓', full: 'Not saved: storage full' }[saveNote]}
+          </span>
+        )}
         <div className="flex-1" />
         {view === 'card' && (
           <ExportBar
@@ -243,6 +295,7 @@ export const App: React.FC = () => {
               const found = VEHICLE_PRESETS.find((p) => p.id === vehicle.id);
               if (found) loadCard({ ...found });
             }}
+            pixelRatio={exportScale}
           />
         )}
         <a
@@ -274,6 +327,7 @@ export const App: React.FC = () => {
           }}
           onOpenCard={(card, path) => loadCard({ ...card }, path ?? null)}
           hoverCards={hoverCards}
+          exportScale={exportScale}
         />
       ) : (
       <main className="flex-1 flex flex-col lg:flex-row min-h-0">
@@ -316,7 +370,25 @@ export const App: React.FC = () => {
           </div>
         </aside>
 
-        <section className="flex-1 overflow-auto flex flex-col items-center gap-3 p-8 bg-[#101316]">
+        <section
+          className={`relative flex-1 overflow-auto flex flex-col items-center gap-3 p-8 bg-[#101316] ${dropping ? 'outline outline-2 -outline-offset-8 outline-dashed outline-[#9cc6de]' : ''}`}
+          onDragOver={(e) => {
+            if (!e.dataTransfer.types.includes('Files')) return;
+            e.preventDefault();
+            setDropping(true);
+          }}
+          onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDropping(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDropping(false);
+            takePicture(e.dataTransfer.files[0]);
+          }}
+        >
+          {dropping && (
+            <div className="absolute top-3 z-20 px-3 py-1 bg-[#0c1118] border border-[#4a5661] text-[13px] text-[#c0c0c0] pointer-events-none">
+              Drop the picture to use it on the card
+            </div>
+          )}
           {editPath && (
             <div className="text-[13px] text-[#8a939b]">
               Editing a card from <span className="text-[#c0c0c0]">{myTree.name}</span>. Changes are saved into the tree.{' '}
@@ -395,6 +467,17 @@ export const App: React.FC = () => {
               hint: 'In the tech tree, hovering a vehicle shows its stat card, like in-game.',
               value: hoverCards,
               onChange: setHoverCards,
+            },
+            {
+              label: 'Export size',
+              hint: 'Size of Copy image, Save PNG / JPG and Save all cards, compared to the card on screen.',
+              value: String(exportScale),
+              options: [
+                ['1', '1×'],
+                ['2', '2×'],
+                ['4', '4×'],
+              ],
+              onChange: (v: string) => setExportScale(+v),
             },
             {
               label: 'Auto-format',
