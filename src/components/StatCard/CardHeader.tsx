@@ -218,19 +218,24 @@ export const CLASS_METAS: Record<VehicleClass, ClassMeta> = {
   },
 };
 
+// Status text: one row per line, and [GE] / [SL] / [RP] (any case) become the game's currency icons
+const CURRENCY: Record<string, string> = {
+  GE: 'assets/game/svg/item_type_eagles.svg',
+  SL: 'assets/game/svg/item_type_warpoints.svg',
+  RP: 'assets/game/svg/item_type_rp.svg',
+};
+export const statusLines = (text: string) =>
+  text.split('\n').map((line, i) => (
+    <div key={i}>
+      {line.split(/\[(GE|SL|RP)\]/i).map((part, j) =>
+        j % 2 ? <img key={j} src={CURRENCY[part.toUpperCase()]} alt={part} className="inline-block w-3.5 h-3.5 align-[-2px]" /> : part
+      )}
+    </div>
+  ));
+
 export const CardHeader: React.FC<CardHeaderProps> = ({ vehicle, onImageChange }) => {
   const classMeta = CLASS_METAS[vehicle.vehicleClass] || CLASS_METAS.medium_tank;
-  const lines = (text: string) => text.split('\n').map((line, i) => <div key={i}>{line}</div>);
-  const withGe = (line: string, key: number) => (
-    <div key={key}>
-      {line.split('[GE]').map((part, i, all) => (
-        <React.Fragment key={i}>
-          {part}
-          {i < all.length - 1 && <img src="assets/game/svg/item_type_eagles.svg" alt="GE" className="inline-block w-3.5 h-3.5 align-[-2px]" />}
-        </React.Fragment>
-      ))}
-    </div>
-  );
+  const text = vehicle.statusText;
 
   return (
     <div className="w-full flex flex-col items-center text-center">
@@ -280,40 +285,45 @@ export const CardHeader: React.FC<CardHeaderProps> = ({ vehicle, onImageChange }
 
       {vehicle.statusType === 'locked' && (
         <div className="w-full mt-[4px] text-[#f02020]">
-          {vehicle.statusText
-            ? lines(vehicle.statusText)
-            : lines(`Rank ${vehicle.rank} is locked.\nYou need to purchase more vehicles of rank ${vehicle.rank}.`)}
+          {statusLines(text || `Rank ${vehicle.rank} is locked.\nYou need to purchase more vehicles of rank ${vehicle.rank}.`)}
         </div>
       )}
 
       {vehicle.statusType === 'reserve' && (
         <div className="w-full mt-[4px] px-2">
-          {vehicle.statusText || 'A reserve vehicle, available to everyone. This vehicle is repaired immediately after each battle.'}
+          {statusLines(text || 'A reserve vehicle, available to everyone. This vehicle is repaired immediately after each battle.')}
         </div>
       )}
 
       {vehicle.statusType === 'squadron' && (
         <div className="w-full mt-[4px] text-[#bde9b5]">
           <div>Squadron vehicle</div>
-          {vehicle.statusText && <div className="text-[#c0c0c0]">{vehicle.statusText}</div>}
+          {text && <div className="text-[#c0c0c0]">{statusLines(text)}</div>}
         </div>
       )}
 
       {vehicle.statusType === 'pack' && (
         <div className="w-full mt-[4px] text-[#f9db78]">
-          {(vehicle.statusText ||
-            'This vehicle can only be obtained by purchasing a special pack.\n+ 20 backup vehicles for free, you save 2,200[GE]!'
-          )
-            .split('\n')
-            .map(withGe)}
+          {statusLines(text || 'This vehicle can only be obtained by purchasing a special pack.\n+ 20 backup vehicles for free, you save 2,200[GE]!')}
         </div>
       )}
 
       {vehicle.statusType === 'premium' && (
         <div className="w-full mt-[4px] text-[#f9db78]">
-          You can purchase this vehicle for <span className="text-[#fa4a38]">{vehicle.price || '7,480'}</span>
-          <img src="assets/game/svg/item_type_eagles.svg" alt="GE" className="inline-block w-3.5 h-3.5 align-[-2px]" />
+          {text ? (
+            statusLines(text)
+          ) : (
+            <>
+              You can purchase this vehicle for <span className="text-[#fa4a38]">{vehicle.price || '7,480'}</span>
+              <img src={CURRENCY.GE} alt="GE" className="inline-block w-3.5 h-3.5 align-[-2px]" />
+            </>
+          )}
         </div>
+      )}
+
+      {/* Other statuses have no line of their own; status text typed for them still shows */}
+      {(vehicle.statusType === 'standard' || vehicle.statusType === 'event') && text && (
+        <div className="w-full mt-[4px]">{statusLines(text)}</div>
       )}
     </div>
   );

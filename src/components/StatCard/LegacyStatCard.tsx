@@ -1,6 +1,6 @@
 import React from 'react';
 import { VehicleData } from '../../types/vehicle';
-import { CLASS_METAS, PictureBox } from './CardHeader';
+import { CLASS_METAS, PictureBox, statusLines } from './CardHeader';
 
 // The "Simple" 555px card layout (kept as cardLayout 'legacy' so saved JSON still loads).
 // The game's PT Sans comes in regular weight only (no bold or italic file), so emphasis is by colour, not by a
@@ -74,20 +74,33 @@ export const LegacyStatCard: React.FC<LegacyStatCardProps> = ({ vehicle: v, onIm
         imgClassName="max-h-[160px] max-w-[90%] object-contain"
       />
 
-      {v.statusType === 'squadron' && <div className="text-center text-[#a1d26a] text-[14px] my-1">Squadron vehicle</div>}
+      {v.statusType === 'squadron' && (
+        <div className="text-center text-[#a1d26a] text-[14px] my-1">
+          Squadron vehicle
+          {v.statusText && <div className="text-[12px] text-[#c0c0c0]">{statusLines(v.statusText)}</div>}
+        </div>
+      )}
       {v.statusType === 'pack' && (
         <div className="text-center text-[#f4d776] text-[14px] my-1">
           Pack vehicle
           <div className="text-[12px] text-[#c0c0c0]">
-            {v.statusText || 'This vehicle can only be obtained by purchasing a special pack.'}
+            {statusLines(v.statusText || 'This vehicle can only be obtained by purchasing a special pack.')}
           </div>
         </div>
       )}
-      {v.statusType === 'premium' && (
-        <div className="text-center text-[#f4d776] text-[13.5px] my-1 flex items-center justify-center gap-1">
-          <span>You can purchase this vehicle for</span>
-          <span className="text-[#f74a38]">{v.price}</span>
-          <img src={GE} alt="GE" className="w-3.5 h-3.5" />
+      {v.statusType === 'premium' &&
+        (v.statusText ? (
+          <div className="text-center text-[#f4d776] text-[13.5px] my-1">{statusLines(v.statusText)}</div>
+        ) : (
+          <div className="text-center text-[#f4d776] text-[13.5px] my-1 flex items-center justify-center gap-1">
+            <span>You can purchase this vehicle for</span>
+            <span className="text-[#f74a38]">{v.price}</span>
+            <img src={GE} alt="GE" className="w-3.5 h-3.5" />
+          </div>
+        ))}
+      {['locked', 'reserve', 'standard', 'event'].includes(v.statusType) && v.statusText && (
+        <div className={`text-center text-[13px] my-1 ${v.statusType === 'locked' ? 'text-[#f02020]' : 'text-[#c0c0c0]'}`}>
+          {statusLines(v.statusText)}
         </div>
       )}
 

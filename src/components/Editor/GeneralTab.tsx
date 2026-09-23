@@ -158,7 +158,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({ vehicle, onChange, onOpe
         </div>
         {vehicle.statusType !== 'standard' && (
           <div className="mt-3">
-            <label className="ui-label">Status text (one line per row, [GE] for the eagle icon)</label>
+            <label className="ui-label">Status text (one line per row; [GE], [SL], [RP] become icons)</label>
             <textarea
               rows={2}
               name="statusText"
