@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { GameMode, VehicleData, VehicleClass } from '../types/vehicle';
 import { GameCatalog, GameVehicle, gameToVehicle, loadGameCatalog } from '../data/gameVehicles';
 import { CLASS_METAS } from './StatCard/CardHeader';
+import { ModernStatCard } from './StatCard/ModernStatCard';
+import { LegacyStatCard } from './StatCard/LegacyStatCard';
 import { exportCardAsPng } from '../utils/exportImage';
 import { downloadJson, loadJson, saveJson } from '../utils/storage';
 import { FLAGS } from '../data/flags';
@@ -112,8 +114,9 @@ const TileBox: React.FC<{
   onDragStart?: () => void;
   onDragEnd?: () => void;
   onContextMenu?: () => void;
-  tip: string;
-}> = ({ entry, style, selected, onClick, onDragStart, onDragEnd, onContextMenu, tip }) => {
+  tip?: string;
+  onHover?: (rect: DOMRect | null) => void;
+}> = ({ entry, style, selected, onClick, onDragStart, onDragEnd, onContextMenu, tip, onHover }) => {
   const t = entry.tiles[0];
   const brs = entry.tiles.map((x) => parseFloat(x.br)).filter((n) => !isNaN(n));
   const br =
@@ -127,8 +130,11 @@ const TileBox: React.FC<{
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', t.name);
+        onHover?.(null);
         onDragStart?.();
       }}
+      onMouseEnter={(e) => onHover?.(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => onHover?.(null)}
       onDragEnd={onDragEnd}
       onContextMenu={(e) => {
         if (!onContextMenu) return;
@@ -201,7 +207,10 @@ const TreeCanvas: React.FC<{
   selectedCol?: number | null;
   onPickColumn?: (col: number) => void;
   onMove?: (from: NodePath, to: DropTarget) => void;
-}> = ({ columns, premium, selected, onPick, onOpen, editable, selectedCol, onPickColumn, onMove }) => {
+  // Stat card on hover: the hovered vehicle and its tile's place on screen (null when the pointer leaves)
+  onHover?: (hover: { path: NodePath; rect: DOMRect } | null) => void;
+}> = ({ columns, premium, selected, onPick, onOpen, editable, selectedCol, onPickColumn, onMove, onHover }) => {
+  const hoverOf = (path: NodePath) => onHover && ((rect: DOMRect | null) => onHover(rect && { path, rect }));
   // Hover tip: the tile's name and what the mouse does with it
   const tipOf = (name: string, folder: boolean, drag: boolean) =>
     [
@@ -367,7 +376,8 @@ const TreeCanvas: React.FC<{
                   setDrop(null);
                 }}
                 onContextMenu={() => (e.folder ? setOpen(key) : onOpen?.([ci, ei, 0]))}
-                tip={tipOf(e.folder ? e.name || e.tiles.map((t) => t.name).join('/') : e.tiles[0].name, e.folder, !!editable)}
+                tip={onHover && !e.folder ? undefined : tipOf(e.folder ? e.name || e.tiles.map((t) => t.name).join('/') : e.tiles[0].name, e.folder, !!editable)}
+                onHover={e.folder ? undefined : hoverOf([ci, ei, 0])}
                 onClick={() => {
                   if (e.folder) {
                     setOpen(open === key ? null : key);
@@ -404,7 +414,8 @@ const TreeCanvas: React.FC<{
                           selected={isSel && selected![2] === ii}
                           onClick={() => onPick([ci, ei, ii])}
                           onContextMenu={() => onOpen?.([ci, ei, ii])}
-                          tip={tipOf(t.name, false, false)}
+                          tip={onHover ? undefined : tipOf(t.name, false, false)}
+                          onHover={hoverOf([ci, ei, ii])}
                         />
                       </React.Fragment>
                     ))}
@@ -421,6 +432,30 @@ const TreeCanvas: React.FC<{
 
 // ---------- view ----------
 
+// Like the game: hovering a vehicle shows its stat card beside the tile, on the side with room,
+// kept on screen (and shrunk if the window is too short for it)
+const HoverCard: React.FC<{ card: VehicleData; rect: DOMRect; hint: string }> = ({ card, rect, hint }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState({ top: rect.top, scale: 1 });
+  useLayoutEffect(() => {
+    const h = ref.current!.offsetHeight;
+    const scale = Math.min(1, (innerHeight - 16) / h);
+    setFit({ top: Math.max(8, Math.min(rect.top, innerHeight - 8 - h * scale)), scale });
+  }, [card, rect]);
+  const w = (card.cardLayout === 'legacy' ? 555 : 434) * fit.scale;
+  const left = rect.right + 12 + w < innerWidth ? rect.right + 12 : Math.max(8, rect.left - 12 - w);
+  return (
+    <div
+      ref={ref}
+      className="fixed z-40 pointer-events-none origin-top-left"
+      style={{ left, top: fit.top, transform: `scale(${fit.scale})` }}
+    >
+      {card.cardLayout === 'legacy' ? <LegacyStatCard vehicle={card} /> : <ModernStatCard vehicle={card} />}
+      <div className="mt-1 text-[12px] text-[#8a939b] [text-shadow:0_1px_2px_#000]">{hint}</div>
+    </div>
+  );
+};
+
 interface TechTreeViewProps {
   mode: 'game' | 'mine';
   onModeChange: (m: 'game' | 'mine') => void;
@@ -429,6 +464,7 @@ interface TechTreeViewProps {
   myTree: MyTree;
   onChangeMyTree: (t: MyTree, replaced?: boolean) => void; // replaced: a different tree, not an edit of this one
   onOpenCard: (card: VehicleData, editPath?: NodePath) => void;
+  hoverCards: boolean; // stat card pops up when hovering a vehicle (Settings)
 }
 
 export const TechTreeView: React.FC<TechTreeViewProps> = ({
@@ -439,6 +475,7 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
   myTree,
   onChangeMyTree,
   onOpenCard,
+  hoverCards,
 }) => {
   const [data, setData] = useState<GameCatalog | null>(null);
   const [error, setError] = useState('');
@@ -449,6 +486,8 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
   const [ask, setAsk] = useState<PromptRequest | null>(null);
   const [prefs, setPrefsState] = useState<NationPrefs>(() => loadJson<NationPrefs>('thundercard_nations') ?? EMPTY_PREFS);
   const [nationsOpen, setNationsOpen] = useState(false);
+  const [hover, setHover] = useState<{ path: NodePath; rect: DOMRect } | null>(null);
+  useEffect(() => setHover(null), [mode, country]);
   const setPrefs = (p: NationPrefs) => {
     setPrefsState(p);
     saveJson('thundercard_nations', p);
@@ -674,8 +713,21 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
   const safeName = (myTree.name || 'tree').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
   const activeCountry = mode === 'game' ? country : myTree.country;
 
+  const hoverPath = hover?.path ?? [-1, -1, -1];
+  const hoverCard =
+    mode === 'game'
+      ? gameTree[hoverPath[0]]?.[hoverPath[1]] && card(gameTree[hoverPath[0]][hoverPath[1]].ids[hoverPath[2]])
+      : cols[hoverPath[0]]?.[hoverPath[1]]?.cards[hoverPath[2]];
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      {hover && hoverCard && (
+        <HoverCard
+          card={hoverCard}
+          rect={hover.rect}
+          hint={mode === 'game' ? 'Click or right-click: open card' : 'Click: select · Right-click: open card · Drag: move'}
+        />
+      )}
       {ask && <PromptDialog {...ask} onClose={() => setAsk(null)} />}
       {nationsOpen && <NationsDialog nations={allNations} prefs={prefs} onChange={setPrefs} onClose={() => setNationsOpen(false)} />}
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-[#353e47] bg-[#1e2328]">
@@ -842,6 +894,7 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
             premium={gamePremium}
             onPick={([c, e, i]) => i >= 0 && onOpenCard(card(gameTree[c][e].ids[i]))}
             onOpen={([c, e, i]) => onOpenCard(card(gameTree[c][e].ids[i]))}
+            onHover={hoverCards ? setHover : undefined}
           />
         )}
         {mode === 'mine' && (
@@ -869,6 +922,7 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
                   setSelCol(ci);
                 }}
                 onMove={moveTo}
+                onHover={hoverCards ? setHover : undefined}
                 onOpen={([c, e, i]) => onOpenCard(cols[c][e].cards[i], [c, e, i])}
               />
             )}

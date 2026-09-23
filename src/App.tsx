@@ -90,6 +90,7 @@ export const App: React.FC = () => {
   const [treeKey, setTreeKey] = useState(0); // remounts the tree view so it re-reads nations after an import
   const [autoFormat, setAutoFormat] = useState(() => loadJson<boolean>('thundercard_autoformat') ?? true);
   const [autoSaveOn, setAutoSaveOn] = useState(() => loadJson<boolean>('thundercard_autosave') ?? true);
+  const [hoverCards, setHoverCards] = useState(() => loadJson<boolean>('thundercard_hover_cards') ?? true);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -104,6 +105,9 @@ export const App: React.FC = () => {
   useEffect(() => {
     saveJson('thundercard_autosave', autoSaveOn);
   }, [autoSaveOn]);
+  useEffect(() => {
+    saveJson('thundercard_hover_cards', hoverCards);
+  }, [hoverCards]);
 
   // Auto-save: edits go into the Library save the card / tree was opened from, or once edited,
   // into a new save in the Library's Autosave folder. Pending edits are flushed before anything replaces them.
@@ -269,6 +273,7 @@ export const App: React.FC = () => {
             setMyTree(t);
           }}
           onOpenCard={(card, path) => loadCard({ ...card }, path ?? null)}
+          hoverCards={hoverCards}
         />
       ) : (
       <main className="flex-1 flex flex-col lg:flex-row min-h-0">
@@ -384,6 +389,12 @@ export const App: React.FC = () => {
               hint: 'Edits are saved into the Library as you work: into the save you opened, otherwise into the Autosave folder (newest 30 kept).',
               value: autoSaveOn,
               onChange: setAutoSaveOn,
+            },
+            {
+              label: 'Stat card on hover',
+              hint: 'In the tech tree, hovering a vehicle shows its stat card, like in-game.',
+              value: hoverCards,
+              onChange: setHoverCards,
             },
             {
               label: 'Auto-format',
