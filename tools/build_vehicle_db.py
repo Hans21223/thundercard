@@ -286,7 +286,7 @@ def build():
             'ammoCaliber': cal,
             'crew': u.get('crewTotalCount', ''),
             'mass': half_up(phys.get('Mass', {}).get('TakeOff', t.get('mass', 0)) / 1000) + ' t',
-            'enginePower': f"{eng.get('horsePowers', 0):g} hp at {eng.get('maxRPM', 0):g} rpm",
+            'enginePower': f"{round(eng.get('horsePowers', 0))} hp at {round(eng.get('maxRPM', 0))} rpm",
             'maxSpeedForward': f'{speed(min(fwd)):.1f}' if fwd else '',
             'maxSpeedReverse': f'{speed(max(rev)):.1f}' if rev else '',
             'requiredRP': num(u['reqExp']) if u.get('reqExp') else '',

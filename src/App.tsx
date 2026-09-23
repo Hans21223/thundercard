@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { VehicleData } from './types/vehicle';
 import { VEHICLE_PRESETS } from './data/presets';
 import { ModernStatCard } from './components/StatCard/ModernStatCard';
@@ -96,13 +96,53 @@ export const App: React.FC = () => {
     saveJson('thundercard_autoformat', autoFormat);
   }, [autoFormat]);
 
+  // Undo / redo over the card and My tree. Typing merges into one step; every other change is its own step.
+  type Snapshot = { vehicle: VehicleData; myTree: MyTree };
+  const undoStack = useRef<Snapshot[]>([]);
+  const redoStack = useRef<Snapshot[]>([]);
+  const lastChange = useRef(0);
+  const [, rerender] = useState(0);
+  const remember = (typing = false) => {
+    const now = Date.now();
+    if (!typing || now - lastChange.current > 700) {
+      undoStack.current = [...undoStack.current.slice(-99), { vehicle, myTree }];
+      redoStack.current = [];
+      rerender((n) => n + 1);
+    }
+    lastChange.current = now;
+  };
+  const step = (from: React.MutableRefObject<Snapshot[]>, to: React.MutableRefObject<Snapshot[]>) => {
+    const snap = from.current.pop();
+    if (!snap) return;
+    to.current.push({ vehicle, myTree });
+    setVehicle(snap.vehicle);
+    setMyTree(snap.myTree);
+    lastChange.current = 0;
+    rerender((n) => n + 1);
+  };
+  const undo = () => step(undoStack, redoStack);
+  const redo = () => step(redoStack, undoStack);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if (!(e.ctrlKey || e.metaKey) || (k !== 'z' && k !== 'y')) return;
+      e.preventDefault();
+      if (k === 'y' || e.shiftKey) redo();
+      else undo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   // Edits made in the editor; a card opened from My tree is saved back into the tree as you type
   const updateVehicle = (updates: Partial<VehicleData>) => {
+    remember(true);
     const next = { ...vehicle, ...updates };
     setVehicle(next);
     if (editPath) setMyTree((t) => setCardAt(t, editPath, next));
   };
   const loadCard = (v: VehicleData, path: NodePath | null = null) => {
+    remember();
     setEditPath(path);
     setVehicle(v);
     setView('card');
@@ -126,6 +166,12 @@ export const App: React.FC = () => {
         </button>
         <button type="button" onClick={() => loadCard({ ...BLANK, id: 'custom_' + Date.now() })} className="ui-btn">
           New
+        </button>
+        <button type="button" onClick={undo} disabled={!undoStack.current.length} className="ui-btn" title="Undo (Ctrl+Z)">
+          Undo
+        </button>
+        <button type="button" onClick={redo} disabled={!redoStack.current.length} className="ui-btn" title="Redo (Ctrl+Y)">
+          Redo
         </button>
         <div className="flex-1" />
         {view === 'card' && (
@@ -157,6 +203,7 @@ export const App: React.FC = () => {
           currentCard={vehicle}
           myTree={myTree}
           onChangeMyTree={(t) => {
+            remember();
             setEditPath(null); // the tree changed shape; stop writing edits into an old slot
             setMyTree(t);
           }}
@@ -180,13 +227,6 @@ export const App: React.FC = () => {
                 {tab.label}
               </button>
             ))}
-            <label
-              className="ml-auto flex items-center gap-1.5 px-3 text-[12px] text-[#8a939b]"
-              title='Tidy numbers when you leave a field, e.g. "130 38 50" → "130 / 38 / 50 mm"'
-            >
-              <input type="checkbox" checked={autoFormat} onChange={(e) => setAutoFormat(e.target.checked)} className="ui-check" />
-              Auto-format
-            </label>
           </nav>
           <div
             className="flex-1 overflow-y-auto p-4"
@@ -208,6 +248,10 @@ export const App: React.FC = () => {
               <VisualTab vehicle={vehicle} onChange={updateVehicle} onOpenFlagPicker={() => setFlagPickerOpen(true)} />
             )}
           </div>
+          <label className="flex items-center gap-2 px-4 py-2 border-t border-[#353e47] text-[12px] text-[#8a939b]">
+            <input type="checkbox" checked={autoFormat} onChange={(e) => setAutoFormat(e.target.checked)} className="ui-check" />
+            Auto-format numbers when you leave a field (130 38 50 becomes 130 / 38 / 50 mm)
+          </label>
         </aside>
 
         <section className="flex-1 overflow-auto flex flex-col items-center gap-3 p-8 bg-[#101316]">
@@ -239,6 +283,7 @@ export const App: React.FC = () => {
         tree={myTree}
         onOpenCard={(v) => loadCard(v)}
         onOpenTree={(t) => {
+          remember();
           setEditPath(null);
           setMyTree(t);
           setTreeMode('mine');

@@ -102,7 +102,7 @@ export interface VehicleData {
   price?: string;
   priceCurrency?: 'sl' | 'ge';
   cantAfford?: boolean; // price shown in red
-  owned?: boolean; // hides research/purchase rows, repair time is "(with crew)"
+  owned?: boolean; // hides Required RP / Price, repair time is "(with crew)"
   crewTrainCost: string;
   freeRepairs: string;
   repairCostPerMin: string;

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { FLAGS } from '../data/flags';
+import { shrinkImage } from '../utils/exportImage';
 
 interface FlagPickerModalProps {
   isOpen: boolean;
@@ -16,13 +17,7 @@ export const FlagPickerModal: React.FC<FlagPickerModalProps> = ({ isOpen, select
   const uploadFlag = async (file?: File) => {
     if (!file) return;
     try {
-      const img = await createImageBitmap(file);
-      const scale = Math.min(1, 440 / img.width, 250 / img.height);
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-      onSelect(canvas.toDataURL('image/png'));
+      onSelect(await shrinkImage(file, 440, 250));
       onClose();
     } catch {
       alert('Could not read that image. Try a PNG or JPG.');

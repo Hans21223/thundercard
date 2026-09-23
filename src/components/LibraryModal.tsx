@@ -3,6 +3,7 @@ import { VehicleData } from '../types/vehicle';
 import { VEHICLE_PRESETS } from '../data/presets';
 import { MyTree } from './TechTreeView';
 import { downloadJson, loadJson, saveJson } from '../utils/storage';
+import { PromptDialog, PromptRequest } from './PromptDialog';
 
 // Saved vehicles and saved tech trees live in two separate libraries, each with its own folders.
 
@@ -36,7 +37,7 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, 
   const [libs, setLibs] = useState({ cards: load<VehicleData>('cards'), trees: load<MyTree>('trees') });
   const [saveName, setSaveName] = useState('');
   const [saveFolder, setSaveFolder] = useState('');
-  const [newFolder, setNewFolder] = useState('');
+  const [ask, setAsk] = useState<PromptRequest | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Reset the form each time the dialog opens
@@ -73,21 +74,30 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, 
       ],
     });
 
-  const addFolder = () => {
-    const name = newFolder.trim();
-    if (!name || lib.folders.includes(name)) return;
-    commit({ ...lib, folders: [...lib.folders, name] });
-    setSaveFolder(name);
-    setNewFolder('');
-  };
-  const renameFolder = (old: string) => {
-    const name = prompt('Folder name', old)?.trim();
-    if (!name || name === old || lib.folders.includes(name)) return;
-    commit({
-      folders: lib.folders.map((f) => (f === old ? name : f)),
-      items: lib.items.map((it) => (it.folder === old ? { ...it, folder: name } : it)),
+  const addFolder = () =>
+    setAsk({
+      title: 'New folder',
+      placeholder: 'Folder name',
+      confirmText: 'Create',
+      onSubmit: (name) => {
+        if (lib.folders.includes(name)) return;
+        commit({ ...lib, folders: [...lib.folders, name] });
+        setSaveFolder(name);
+      },
     });
-  };
+  const renameFolder = (old: string) =>
+    setAsk({
+      title: 'Rename folder',
+      initial: old,
+      confirmText: 'Rename',
+      onSubmit: (name) => {
+        if (name === old || lib.folders.includes(name)) return;
+        commit({
+          folders: lib.folders.map((f) => (f === old ? name : f)),
+          items: lib.items.map((it) => (it.folder === old ? { ...it, folder: name } : it)),
+        });
+      },
+    });
   const deleteFolder = (f: string) => {
     const n = lib.items.filter((it) => it.folder === f).length;
     if (n && !confirm(`Delete folder "${f}" and the ${n} save(s) in it?`)) return;
@@ -141,7 +151,11 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, 
       >
         Save over
       </button>
-      <button type="button" onClick={() => { const n = prompt('Name', it.name)?.trim(); if (n) patchItem(it.id, { name: n }); }} className="ui-btn !h-6 !px-2 text-[12px]">
+      <button
+        type="button"
+        onClick={() => setAsk({ title: 'Rename', initial: it.name, confirmText: 'Rename', onSubmit: (n) => patchItem(it.id, { name: n }) })}
+        className="ui-btn !h-6 !px-2 text-[12px]"
+      >
         Rename
       </button>
       <button
@@ -176,6 +190,7 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, 
 
   return (
     <div className="ui-modal" onClick={onClose}>
+      {ask && <PromptDialog {...ask} onClose={() => setAsk(null)} />}
       <div className="w-full max-w-3xl max-h-[85vh] flex flex-col bg-[#1e2328] border border-[#353e47]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2 px-4 py-3 border-b border-[#353e47]">
           <span className="font-bold text-[#f0f0f0] mr-2">Library</span>
@@ -217,16 +232,8 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({ isOpen, initialTab, 
             {tab === 'cards' ? 'Save current card' : 'Save current tree'}
           </button>
           <div className="flex-1" />
-          <input
-            type="text"
-            value={newFolder}
-            onChange={(e) => setNewFolder(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addFolder()}
-            placeholder="New folder name"
-            className="ui-input !w-40"
-          />
           <button type="button" onClick={addFolder} className="ui-btn">
-            New folder
+            New folder…
           </button>
         </div>
 

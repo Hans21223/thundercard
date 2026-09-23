@@ -3,7 +3,10 @@ import { GameMode, VehicleData, VehicleClass } from '../types/vehicle';
 import { GameCatalog, GameVehicle, gameToVehicle, loadGameCatalog } from '../data/gameVehicles';
 import { CLASS_METAS } from './StatCard/CardHeader';
 import { exportCardAsPng } from '../utils/exportImage';
-import { downloadJson } from '../utils/storage';
+import { downloadJson, loadJson, saveJson } from '../utils/storage';
+import { FLAGS } from '../data/flags';
+import { PromptDialog, PromptRequest } from './PromptDialog';
+import { Nation, NationPrefs, NationsDialog, EMPTY_PREFS, orderNations } from './NationsDialog';
 
 // My tree: same shape as the game's — columns of entries; a folder entry holds several cards.
 export interface MyTreeEntry {
@@ -93,7 +96,10 @@ const TileBox: React.FC<{
   style?: React.CSSProperties;
   selected?: boolean;
   onClick: () => void;
-}> = ({ entry, style, selected, onClick }) => {
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+  onContextMenu?: () => void;
+}> = ({ entry, style, selected, onClick, onDragStart, onDragEnd, onContextMenu }) => {
   const t = entry.tiles[0];
   const brs = entry.tiles.map((x) => parseFloat(x.br)).filter((n) => !isNaN(n));
   const br =
@@ -103,6 +109,19 @@ const TileBox: React.FC<{
   return (
     <button
       type="button"
+      draggable={!!onDragStart}
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', t.name);
+        onDragStart?.();
+      }}
+      onDragEnd={onDragEnd}
+      onContextMenu={(e) => {
+        if (!onContextMenu) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onContextMenu();
+      }}
       onClick={(e) => {
         e.stopPropagation();
         onClick();
@@ -151,13 +170,27 @@ const Arrow: React.FC<{ x: number; from: number; to: number }> = ({ x, from, to 
   </>
 );
 
+interface DropTarget {
+  col: number;
+  rank: number;
+  slot: number; // position among that column's vehicles of this rank
+}
+
 const TreeCanvas: React.FC<{
   columns: Entry[][];
   premium: Set<number>;
   selected?: NodePath | null;
   onPick: (path: NodePath) => void;
-}> = ({ columns, premium, selected, onPick }) => {
+  onOpen?: (path: NodePath) => void; // right-click: open the vehicle's card
+  // My tree only: select empty columns, drag vehicles around
+  editable?: boolean;
+  selectedCol?: number | null;
+  onPickColumn?: (col: number) => void;
+  onMove?: (from: NodePath, to: DropTarget) => void;
+}> = ({ columns, premium, selected, onPick, onOpen, editable, selectedCol, onPickColumn, onMove }) => {
   const [open, setOpen] = useState<string | null>(null); // folder "c:e" whose members are shown
+  const [drag, setDrag] = useState<NodePath | null>(null);
+  const [drop, setDrop] = useState<DropTarget | null>(null);
 
   // Column x positions: researchable columns, then premium ones after a divider
   const order = [...columns.keys()].sort((a, b) => Number(premium.has(a)) - Number(premium.has(b)) || a - b);
@@ -175,7 +208,7 @@ const TreeCanvas: React.FC<{
   const width = x - (T.COL - T.W) + T.LEFT / 3;
 
   // Rank bands: as tall as the column with the most entries of that rank
-  const maxRank = Math.max(1, ...columns.flat().map((e) => e.rank));
+  const maxRank = Math.max(editable ? 8 : 1, ...columns.flat().map((e) => e.rank)); // My tree: every rank is a drop row
   const bands: { rank: number; top: number; height: number }[] = [];
   let y = T.HEAD;
   for (let r = 1; r <= maxRank; r++) {
@@ -194,6 +227,25 @@ const TreeCanvas: React.FC<{
 
   const researchCenter = ((dividerX ?? width) + T.LEFT) / 2;
   const premiumCenter = dividerX !== null ? (dividerX + width) / 2 : 0;
+  const slotTop = (t: DropTarget) => bands[t.rank - 1].top + T.PAD + t.slot * T.ROW;
+
+  // Which column / rank row / slot the pointer is over while dragging
+  const targetAt = (e: React.DragEvent): DropTarget | null => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const px = e.clientX - r.left;
+    const py = e.clientY - r.top;
+    let col = -1;
+    let best = Infinity;
+    xs.forEach((cx, ci) => {
+      const d = Math.abs(px - (cx + T.W / 2));
+      if (d < best) [best, col] = [d, ci];
+    });
+    if (col < 0 || best > T.COL * 0.75) return null;
+    const band = bands.find((b) => py < b.top + b.height) ?? bands[bands.length - 1];
+    const others = columns[col].filter((e2, ei) => e2.rank === band.rank && !(drag && drag[0] === col && drag[1] === ei)).length;
+    const slot = Math.max(0, Math.min(others, Math.round((py - band.top - T.PAD - T.H / 2) / T.ROW)));
+    return { col, rank: band.rank, slot };
+  };
 
   return (
     <div
@@ -201,6 +253,19 @@ const TreeCanvas: React.FC<{
       className="relative shrink-0 select-none"
       style={{ width, height: y + 12, background: 'radial-gradient(ellipse at 50% 30%,#2a333b,#171c21 70%)' }}
       onClick={() => setOpen(null)}
+      onDragOver={(e) => {
+        if (!drag) return;
+        e.preventDefault();
+        const t = targetAt(e);
+        if (t?.col !== drop?.col || t?.rank !== drop?.rank || t?.slot !== drop?.slot) setDrop(t);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        const t = targetAt(e);
+        if (drag && t) onMove?.(drag, t);
+        setDrag(null);
+        setDrop(null);
+      }}
     >
       {/* header */}
       <div className="absolute inset-x-0 top-0 border-b border-[#3a454f] bg-[#1f262c]" style={{ height: T.HEAD }} />
@@ -231,6 +296,26 @@ const TreeCanvas: React.FC<{
         </React.Fragment>
       ))}
 
+      {/* My tree: click anywhere in a column (even an empty one) to select it */}
+      {editable &&
+        [...xs].map(([ci, cx]) => (
+          <div
+            key={`col${ci}`}
+            className={`absolute ${selectedCol === ci ? 'bg-[#9cc6de]/[0.07] outline outline-1 outline-[#9cc6de]/40' : 'hover:bg-white/[0.03]'}`}
+            style={{ left: cx - (T.COL - T.W) / 2 + 4, width: T.COL - 8, top: T.HEAD + 1, height: y - T.HEAD - 1 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPickColumn?.(ci);
+            }}
+          />
+        ))}
+      {drop && (
+        <div
+          className="absolute border-2 border-dashed border-[#9cc6de] bg-[#9cc6de]/10 pointer-events-none"
+          style={{ left: xs.get(drop.col), top: slotTop(drop) - 6, width: T.W, height: T.H }}
+        />
+      )}
+
       {/* research arrows, drawn across rank bands */}
       {columns.map((col, ci) =>
         col.map((e, ei) => {
@@ -252,7 +337,13 @@ const TreeCanvas: React.FC<{
               <TileBox
                 entry={e}
                 selected={isSel && (!e.folder || selected![2] === -1)}
-                style={{ left: xs.get(ci), top: pos[ci][ei] }}
+                style={{ left: xs.get(ci), top: pos[ci][ei], opacity: drag?.[0] === ci && drag[1] === ei ? 0.4 : 1 }}
+                onDragStart={editable ? () => setDrag([ci, ei, e.folder ? -1 : 0]) : undefined}
+                onDragEnd={() => {
+                  setDrag(null);
+                  setDrop(null);
+                }}
+                onContextMenu={() => (e.folder ? setOpen(key) : onOpen?.([ci, ei, 0]))}
                 onClick={() => {
                   if (e.folder) {
                     setOpen(open === key ? null : key);
@@ -288,6 +379,7 @@ const TreeCanvas: React.FC<{
                           style={{ left: 21, top: 21 + ii * T.ROW }}
                           selected={isSel && selected![2] === ii}
                           onClick={() => onPick([ci, ei, ii])}
+                          onContextMenu={() => onOpen?.([ci, ei, ii])}
                         />
                       </React.Fragment>
                     ))}
@@ -327,7 +419,15 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
   const [error, setError] = useState('');
   const [country, setCountry] = useState(myTree.country);
   const [sel, setSel] = useState<NodePath | null>(null);
+  const [selCol, setSelCol] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [ask, setAsk] = useState<PromptRequest | null>(null);
+  const [prefs, setPrefsState] = useState<NationPrefs>(() => loadJson<NationPrefs>('thundercard_nations') ?? EMPTY_PREFS);
+  const [nationsOpen, setNationsOpen] = useState(false);
+  const setPrefs = (p: NationPrefs) => {
+    setPrefsState(p);
+    saveJson('thundercard_nations', p);
+  };
 
   useEffect(() => {
     loadGameCatalog().then(setData, (e) => setError(String(e)));
@@ -335,6 +435,16 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
 
   const byId = useMemo(() => new Map<string, GameVehicle>(data?.vehicles.map((v) => [v.card.id!, v])), [data]);
   const countries = data ? Object.keys(data.trees) : [];
+  // Nation bar: the game's nations plus your own, in your order, minus hidden ones
+  const nationName = (id: string) =>
+    prefs.custom.find((n) => n.id === id)?.name ??
+    FLAGS.find((f) => f.path.endsWith(`/${id}.avif`))?.name ??
+    id.replace('country_', '');
+  const allNations: Nation[] = orderNations(
+    [...countries.map((id) => ({ id, name: nationName(id), flag: `assets/game/flags/${id}.avif` })), ...prefs.custom],
+    prefs
+  );
+  const barNations = allNations.filter((n) => !prefs.hidden.includes(n.id));
   const card = (id: string) => gameToVehicle(byId.get(id)!, gameMode, data!.version);
 
   const gameTree = data?.trees[country] ?? [];
@@ -379,10 +489,13 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
     }
     const entry: MyTreeEntry = { cards: [newCard], link: false };
     if (!sel) {
+      // Into the selected column, otherwise the first researchable one
       const base = cols.length ? cols : [[]];
-      const last = base.length - 1;
-      setCols(base.map((col, ci) => (ci === last ? [...col, entry] : col)));
-      setSel([last, base[last].length, 0]);
+      const firstResearch = base.findIndex((_, ci) => !myTree.premium?.includes(ci));
+      const target = selCol ?? (firstResearch < 0 ? 0 : firstResearch);
+      setCols(base.map((col, ci) => (ci === target ? [...col, { ...entry, link: col.length > 0 }] : col)));
+      setSel([target, base[target].length, 0]);
+      setSelCol(target);
       return;
     }
     const [c, e] = sel;
@@ -447,15 +560,69 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
   };
 
   const togglePremium = () => {
-    if (!sel) return;
+    if (selCol === null) return;
     const p = new Set(myTree.premium ?? []);
-    if (p.has(sel[0])) p.delete(sel[0]);
-    else p.add(sel[0]);
+    if (p.has(selCol)) p.delete(selCol);
+    else p.add(selCol);
     update({ premium: [...p] });
   };
 
+  // New column goes right after the selected one (same section), otherwise at the end
+  const addColumn = () => {
+    const at = selCol === null ? cols.length : selCol + 1;
+    const prem = (myTree.premium ?? []).map((i) => (i >= at ? i + 1 : i));
+    if (selCol !== null && myTree.premium?.includes(selCol)) prem.push(at);
+    update({ columns: [...cols.slice(0, at), [], ...cols.slice(at)], premium: prem });
+    setSel(null);
+    setSelCol(at);
+  };
+
+  const deleteColumn = () => {
+    if (selCol === null) return;
+    const n = cols[selCol].reduce((sum, e) => sum + e.cards.length, 0);
+    if (n && !confirm(`Delete this column and its ${n} vehicle(s)?`)) return;
+    update({
+      columns: cols.filter((_, ci) => ci !== selCol),
+      premium: (myTree.premium ?? []).filter((i) => i !== selCol).map((i) => (i > selCol ? i - 1 : i)),
+    });
+    setSel(null);
+    setSelCol(null);
+  };
+
+  // Drag and drop: the vehicle takes the rank of the row it is dropped in
+  const moveTo = ([c, e]: NodePath, to: { col: number; rank: number; slot: number }) => {
+    const next = cols.map((col) => [...col]);
+    const [entry] = next[c].splice(e, 1);
+    const moved = { ...entry, cards: entry.cards.map((cd) => ({ ...cd, rank: ROMAN[to.rank] })) };
+    const target = next[to.col];
+    const sameRank = target.flatMap((en, i) => (rankNum(en.cards[0]?.rank) === to.rank ? [i] : []));
+    const at =
+      to.slot < sameRank.length
+        ? sameRank[to.slot]
+        : target.reduce((last, en, i) => (rankNum(en.cards[0]?.rank) <= to.rank ? i : last), -1) + 1;
+    target.splice(at, 0, moved);
+    setCols(next);
+    setSel([to.col, at, moved.folder || moved.cards.length > 1 ? -1 : 0]);
+    setSelCol(to.col);
+  };
+
+  // New empty tree: five researchable columns and two premium ones, like a game nation
+  const newTree = () => {
+    if (cols.flat().length && !confirm(`Start a new tree? "${myTree.name}" will be replaced — save it in the Library first if you want to keep it.`)) return;
+    setAsk({
+      title: 'New tech tree',
+      placeholder: 'Tree name',
+      confirmText: 'Create',
+      onSubmit: (name) => {
+        onChangeMyTree({ name, country, columns: [[], [], [], [], [], [], []], premium: [5, 6] }); // the nation you last picked
+        setSel(null);
+        setSelCol(null);
+      },
+    });
+  };
+
   const copyGameTree = () => {
-    if (!data || (cols.flat().length && !confirm(`Replace "${myTree.name}" with the game's tree?`))) return;
+    if (!data?.trees[country] || (cols.flat().length && !confirm(`Replace "${myTree.name}" with the game's tree?`))) return;
     onChangeMyTree({
       ...myTree,
       country,
@@ -483,6 +650,8 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      {ask && <PromptDialog {...ask} onClose={() => setAsk(null)} />}
+      {nationsOpen && <NationsDialog nations={allNations} prefs={prefs} onChange={setPrefs} onClose={() => setNationsOpen(false)} />}
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-[#353e47] bg-[#1e2328]">
         {(['game', 'mine'] as const).map((m) => (
           <button key={m} type="button" onClick={() => setMode(m)} className={`ui-choice ${mode === m ? 'is-active' : ''}`}>
@@ -490,23 +659,29 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
           </button>
         ))}
         <span className="w-px h-5 bg-[#353e47] mx-1" />
-        {countries.map((c) => (
+        {barNations.map((n) => (
           <button
-            key={c}
+            key={n.id}
             type="button"
             onClick={() => {
-              setCountry(c);
-              if (mode === 'mine') update({ country: c });
+              setCountry(n.id);
+              if (mode === 'mine') update({ country: n.id });
             }}
-            title={c.replace('country_', '')}
-            className={`ui-choice h-7 !py-0 ${activeCountry === c ? 'is-active' : ''}`}
+            className={`ui-choice h-7 !py-0 flex items-center gap-1.5 ${activeCountry === n.id ? 'is-active' : ''}`}
           >
-            <img src={`assets/game/flags/${c}.avif`} alt={c} className="h-4 w-7 object-contain" />
+            <img src={n.flag} alt="" className="h-4 w-6 object-contain" />
+            {n.name}
           </button>
         ))}
+        <button type="button" onClick={() => setNationsOpen(true)} className="ui-btn" title="Show, hide, reorder or add nations">
+          Customize…
+        </button>
         <div className="flex-1" />
         {mode === 'mine' && (
           <>
+            <button type="button" onClick={newTree} className="ui-btn" title="Start a new empty tree">
+              New tree
+            </button>
             <input
               type="text"
               value={myTree.name}
@@ -533,10 +708,21 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
           <button type="button" onClick={addCurrent} className="ui-btn-primary" title="Add the card open in the editor">
             {selIsFolder ? 'Add current card to folder' : 'Add current card'}
           </button>
-          <button type="button" onClick={() => setCols([...cols, []])} className="ui-btn">
+          <button type="button" onClick={addColumn} className="ui-btn" title="Adds a column after the selected one">
             Add column
           </button>
-          <button type="button" onClick={copyGameTree} className="ui-btn" disabled={!data}>
+          {selCol !== null && (
+            <>
+              <button type="button" onClick={deleteColumn} className="ui-btn hover:!text-[#f02020]">
+                Delete column
+              </button>
+              <label className="flex items-center gap-1.5 px-1">
+                <input type="checkbox" checked={!!myTree.premium?.includes(selCol)} onChange={togglePremium} className="ui-check" />
+                Premium column
+              </label>
+            </>
+          )}
+          <button type="button" onClick={copyGameTree} className="ui-btn" disabled={!data?.trees[country]}>
             Copy game tree
           </button>
           {selEntry && (
@@ -563,10 +749,6 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
                 <input type="checkbox" checked={selEntry.link} onChange={(e) => mapEntry((en) => ({ ...en, link: e.target.checked }))} className="ui-check" />
                 Researched from above
               </label>
-              <label className="flex items-center gap-1.5 px-1">
-                <input type="checkbox" checked={!!myTree.premium?.includes(sel![0])} onChange={togglePremium} className="ui-check" />
-                Premium column
-              </label>
               <span className="w-px h-5 bg-[#353e47] mx-1" />
               {selIsFolder ? (
                 <>
@@ -587,8 +769,20 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
                   </button>
                 </>
               ) : (
-                <button type="button" onClick={() => mapEntry((en) => ({ ...en, folder: true, name: en.cards[0].shortName || en.cards[0].name }))} className="ui-btn">
-                  Make folder
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAsk({
+                      title: 'New folder',
+                      initial: selEntry.cards[0].shortName || selEntry.cards[0].name,
+                      placeholder: 'Folder name',
+                      confirmText: 'Create',
+                      onSubmit: (name) => mapEntry((en) => ({ ...en, folder: true, name })),
+                    })
+                  }
+                  className="ui-btn"
+                >
+                  Make folder…
                 </button>
               )}
               <button type="button" onClick={putInFolderAbove} className="ui-btn" disabled={sel![1] === 0}>
@@ -602,25 +796,58 @@ export const TechTreeView: React.FC<TechTreeViewProps> = ({
         </div>
       )}
 
-      <div className="flex-1 overflow-auto bg-[#101316]" onClick={() => setSel(null)}>
+      <div
+        className="flex-1 overflow-auto bg-[#101316]"
+        onClick={() => {
+          setSel(null);
+          setSelCol(null);
+        }}
+      >
         {error && <div className="p-4 text-[#f02020]">{error}</div>}
         {!data && !error && <div className="p-4">Loading…</div>}
-        {data && mode === 'game' && (
+        {data && mode === 'game' && !data.trees[country] && (
+          <div className="px-4 py-3 text-[13px]">
+            {nationName(country)} is your own nation, so it has no game tree. Switch to <b className="text-[#f0f0f0]">My tree</b> to build one.
+          </div>
+        )}
+        {data && mode === 'game' && data.trees[country] && (
           <TreeCanvas
             columns={gameColumns}
             premium={gamePremium}
             onPick={([c, e, i]) => i >= 0 && onOpenCard(card(gameTree[c][e].ids[i]))}
+            onOpen={([c, e, i]) => onOpenCard(card(gameTree[c][e].ids[i]))}
           />
         )}
-        {mode === 'mine' &&
-          (cols.flat().length ? (
-            <TreeCanvas columns={myColumns} premium={new Set(myTree.premium ?? [])} selected={sel} onPick={setSel} />
-          ) : (
-            <div className="p-4 max-w-md text-[13px] leading-relaxed">
-              Your tree is empty. <b className="text-[#f0f0f0]">Add current card</b> puts the card from the editor here, or{' '}
-              <b className="text-[#f0f0f0]">Copy game tree</b> starts from the selected nation's real tree. A card's rank sets its row.
-            </div>
-          ))}
+        {mode === 'mine' && (
+          <>
+            {!cols.flat().length && (
+              <div className="px-4 py-3 max-w-xl text-[13px] leading-relaxed">
+                Your tree is empty. <b className="text-[#f0f0f0]">Add current card</b> puts the card from the editor here, or{' '}
+                <b className="text-[#f0f0f0]">Copy game tree</b> starts from the selected nation's real tree. Drag vehicles to move
+                them; the row you drop into sets the rank.
+              </div>
+            )}
+            {cols.length > 0 && (
+              <TreeCanvas
+                columns={myColumns}
+                premium={new Set(myTree.premium ?? [])}
+                selected={sel}
+                onPick={(p) => {
+                  setSel(p);
+                  setSelCol(p[0]);
+                }}
+                editable
+                selectedCol={selCol}
+                onPickColumn={(ci) => {
+                  setSel(null);
+                  setSelCol(ci);
+                }}
+                onMove={moveTo}
+                onOpen={([c, e, i]) => onOpenCard(cols[c][e].cards[i], [c, e, i])}
+              />
+            )}
+          </>
+        )}
       </div>
     </div>
   );

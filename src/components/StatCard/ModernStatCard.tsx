@@ -255,7 +255,7 @@ export const ModernStatCard: React.FC<ModernStatCardProps> = ({ vehicle: v, onVi
       </Group>
 
       <Group>
-        {!v.owned && v.freeRepairs && <Row label="Free repairs:">{v.freeRepairs}</Row>}
+        {v.freeRepairs && <Row label="Free repairs:">{v.freeRepairs}</Row>}
         {v.repairCostPerMin && (
           <Row label="Repair cost depending on lifetime:">
             {v.repairCostPerMin}

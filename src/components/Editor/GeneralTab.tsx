@@ -132,14 +132,28 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({ vehicle, onChange, onOpe
         <span className="ui-heading">Status</span>
         <div className="flex flex-wrap gap-1.5">
           {STATUSES.map((st) => (
-            <button
-              key={st.id}
-              type="button"
-              onClick={() => onChange({ statusType: st.id })}
-              className={`ui-choice ${vehicle.statusType === st.id ? 'is-active' : ''}`}
-            >
-              {st.label}
-            </button>
+            <React.Fragment key={st.id}>
+              <button
+                type="button"
+                // Tech tree and Locked mean "not owned"; the rest keep the Owned toggle as it is
+                onClick={() => onChange(st.id === 'standard' || st.id === 'locked' ? { statusType: st.id, owned: false } : { statusType: st.id })}
+                className={`ui-choice ${vehicle.statusType === st.id && !(st.id === 'standard' && vehicle.owned) ? 'is-active' : ''}`}
+              >
+                {st.label}
+              </button>
+              {st.id === 'standard' && (
+                <button
+                  type="button"
+                  title='Hides Required RP and Price; repair time shows "(with crew)"'
+                  onClick={() =>
+                    onChange({ owned: !vehicle.owned, ...(vehicle.statusType === 'locked' ? { statusType: 'standard' as const } : {}) })
+                  }
+                  className={`ui-choice ${vehicle.owned ? 'is-active' : ''}`}
+                >
+                  Owned
+                </button>
+              )}
+            </React.Fragment>
           ))}
         </div>
         {vehicle.statusType !== 'standard' && (
@@ -164,15 +178,6 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({ vehicle, onChange, onOpe
       </div>
 
       <div className="ui-section space-y-2">
-        <label className="flex items-center gap-2 text-[13px]">
-          <input
-            type="checkbox"
-            checked={!!vehicle.owned}
-            onChange={(e) => onChange({ owned: e.target.checked })}
-            className="ui-check"
-          />
-          Owned — hides Required RP, Price and Free repairs; repair time shows "(with crew)"
-        </label>
         <label className="flex items-center gap-2 text-[13px]">
           <input
             type="checkbox"
