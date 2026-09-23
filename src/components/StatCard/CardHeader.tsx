@@ -11,7 +11,7 @@ interface ClassMeta {
   renderIcon: () => React.ReactNode;
 }
 
-const CLASS_METAS: Record<VehicleClass, ClassMeta> = {
+export const CLASS_METAS: Record<VehicleClass, ClassMeta> = {
   light_tank: {
     color: '#ffeeee', // @light_tankColor
     renderIcon: () => (

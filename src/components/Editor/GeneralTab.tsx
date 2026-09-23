@@ -33,21 +33,36 @@ const STATUSES: Array<{ id: CardStatusType; label: string }> = [
 export const GeneralTab: React.FC<GeneralTabProps> = ({ vehicle, onChange, onOpenFlagPicker }) => {
   return (
     <div className="space-y-4">
-      <div>
-        <label className="ui-label">Name</label>
-        <input
-          type="text"
-          value={vehicle.name}
-          onChange={(e) => onChange({ name: e.target.value })}
-          placeholder="High Survivability Test Vehicle — Lightweight"
-          className="ui-input"
-        />
+      <div className="grid grid-cols-[1fr_140px] gap-3">
+        <div>
+          <label className="ui-label">Name</label>
+          <input
+            type="text"
+            name="name"
+            value={vehicle.name}
+            onChange={(e) => onChange({ name: e.target.value })}
+            placeholder="High Survivability Test Vehicle — Lightweight"
+            className="ui-input"
+          />
+        </div>
+        <div>
+          <label className="ui-label">Short name (tech tree)</label>
+          <input
+            type="text"
+            name="shortName"
+            value={vehicle.shortName || ''}
+            onChange={(e) => onChange({ shortName: e.target.value })}
+            placeholder="HSTV-L"
+            className="ui-input"
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="ui-label">Class</label>
           <select
+            name="vehicleClass"
             value={vehicle.vehicleClass}
             onChange={(e) => {
               const val = e.target.value as VehicleClass;
@@ -67,6 +82,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({ vehicle, onChange, onOpe
           <label className="ui-label">Type label</label>
           <input
             type="text"
+            name="typeLabel"
             value={vehicle.typeLabel}
             onChange={(e) => onChange({ typeLabel: e.target.value })}
             placeholder="Light Tank"
@@ -90,6 +106,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({ vehicle, onChange, onOpe
           <label className="ui-label">Battle rating</label>
           <input
             type="text"
+            name="battleRating"
             value={vehicle.battleRating}
             onChange={(e) => onChange({ battleRating: e.target.value })}
             placeholder="12.0"
@@ -101,7 +118,11 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({ vehicle, onChange, onOpe
           <button type="button" onClick={onOpenFlagPicker} className="ui-input flex items-center gap-2 text-left">
             {vehicle.countryFlag && <img src={vehicle.countryFlag} alt="" className="w-6 h-4 object-contain shrink-0" />}
             <span className="truncate text-[12px]">
-              {vehicle.countryFlag ? vehicle.countryFlag.split('/').pop()?.replace(/^country_|\.\w+$/g, '') : 'Choose…'}
+              {vehicle.countryFlag.startsWith('data:')
+                ? 'Custom'
+                : vehicle.countryFlag
+                  ? vehicle.countryFlag.split('/').pop()?.replace(/^country_|\.\w+$/g, '')
+                  : 'Choose…'}
             </span>
           </button>
         </div>
@@ -126,6 +147,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({ vehicle, onChange, onOpe
             <label className="ui-label">Status text (one line per row, [GE] for the eagle icon)</label>
             <textarea
               rows={2}
+              name="statusText"
               value={vehicle.statusText || ''}
               onChange={(e) => onChange({ statusText: e.target.value })}
               placeholder={
@@ -177,6 +199,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({ vehicle, onChange, onOpe
         <label className="ui-label">Top hint</label>
         <input
           type="text"
+          name="headerTooltip"
           value={vehicle.headerTooltip}
           onChange={(e) => onChange({ headerTooltip: e.target.value })}
           placeholder="The information window can be closed with a mouse click."

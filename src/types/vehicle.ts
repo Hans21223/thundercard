@@ -36,6 +36,7 @@ export interface WeaponEntry {
 export interface VehicleData {
   id: string;
   name: string;
+  shortName?: string; // tech tree tile label
   dataFreshness: DataFreshness;
   freshnessNote?: string;
   cardLayout: CardLayout;

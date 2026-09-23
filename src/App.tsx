@@ -11,7 +11,10 @@ import { WeaponsTab } from './components/Editor/WeaponsTab';
 import { ProtectionTab } from './components/Editor/ProtectionTab';
 import { EconomyTab } from './components/Editor/EconomyTab';
 import { VisualTab } from './components/Editor/VisualTab';
-import { loadVehicleFromStorage, saveVehicleToStorage } from './utils/storage';
+import { TechTreeView, MyTree, NodePath, EMPTY_TREE, setCardAt } from './components/TechTreeView';
+import { LibraryModal } from './components/LibraryModal';
+import { loadVehicleFromStorage, saveVehicleToStorage, loadJson, saveJson } from './utils/storage';
+import { FORMATTERS } from './utils/format';
 
 type EditorTab = 'general' | 'weapons' | 'protection' | 'economy' | 'visual';
 
@@ -76,51 +79,81 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<EditorTab>('general');
   const [flagPickerOpen, setFlagPickerOpen] = useState(false);
   const [gamePickerOpen, setGamePickerOpen] = useState(false);
+  const [view, setView] = useState<'card' | 'tree'>('card');
+  const [myTree, setMyTree] = useState<MyTree>(() => loadJson<MyTree>('thundercard_my_tree') ?? EMPTY_TREE);
+  const [editPath, setEditPath] = useState<NodePath | null>(null); // card being edited belongs to My tree
+  const [treeMode, setTreeMode] = useState<'game' | 'mine'>('game');
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [autoFormat, setAutoFormat] = useState(() => loadJson<boolean>('thundercard_autoformat') ?? true);
 
   useEffect(() => {
     saveVehicleToStorage(vehicle);
   }, [vehicle]);
+  useEffect(() => {
+    saveJson('thundercard_my_tree', myTree);
+  }, [myTree]);
+  useEffect(() => {
+    saveJson('thundercard_autoformat', autoFormat);
+  }, [autoFormat]);
 
-  const updateVehicle = (updates: Partial<VehicleData>) => setVehicle((prev) => ({ ...prev, ...updates }));
+  // Edits made in the editor; a card opened from My tree is saved back into the tree as you type
+  const updateVehicle = (updates: Partial<VehicleData>) => {
+    const next = { ...vehicle, ...updates };
+    setVehicle(next);
+    if (editPath) setMyTree((t) => setCardAt(t, editPath, next));
+  };
+  const loadCard = (v: VehicleData, path: NodePath | null = null) => {
+    setEditPath(path);
+    setVehicle(v);
+    setView('card');
+  };
 
   return (
     <div className="min-h-screen lg:h-screen flex flex-col bg-[#16191d] font-ptsans text-[14px]">
       <header className="flex flex-wrap items-center gap-2 px-3 py-1.5 border-b border-[#353e47] bg-[#1e2328]">
         <span className="font-bold text-[#f0f0f0] mr-3">ThunderCard</span>
+        {(['card', 'tree'] as const).map((v) => (
+          <button key={v} type="button" onClick={() => setView(v)} className={`ui-choice ${view === v ? 'is-active' : ''}`}>
+            {v === 'card' ? 'Card' : 'Tech tree'}
+          </button>
+        ))}
+        <span className="w-px h-5 bg-[#353e47] mx-1" />
         <button type="button" onClick={() => setGamePickerOpen(true)} className="ui-btn-primary">
           Load from game…
         </button>
-        <select
-          value=""
-          onChange={(e) => {
-            const preset = VEHICLE_PRESETS.find((p) => p.id === e.target.value);
-            if (preset) setVehicle({ ...preset });
-          }}
-          className="ui-input !w-44"
-        >
-          <option value="" disabled>
-            Presets…
-          </option>
-          {VEHICLE_PRESETS.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name.length > 40 ? p.name.slice(0, 40) + '…' : p.name}
-            </option>
-          ))}
-        </select>
-        <button type="button" onClick={() => setVehicle({ ...BLANK, id: 'custom_' + Date.now() })} className="ui-btn">
+        <button type="button" onClick={() => setLibraryOpen(true)} className="ui-btn" title="Saved vehicles and tech trees">
+          Library…
+        </button>
+        <button type="button" onClick={() => loadCard({ ...BLANK, id: 'custom_' + Date.now() })} className="ui-btn">
           New
         </button>
         <div className="flex-1" />
-        <ExportBar
-          vehicle={vehicle}
-          onImportJson={setVehicle}
-          onResetToDefault={() => {
-            const found = VEHICLE_PRESETS.find((p) => p.id === vehicle.id);
-            if (found) setVehicle({ ...found });
-          }}
-        />
+        {view === 'card' && (
+          <ExportBar
+            vehicle={vehicle}
+            onImportJson={(v) => loadCard(v)}
+            onResetToDefault={() => {
+              const found = VEHICLE_PRESETS.find((p) => p.id === vehicle.id);
+              if (found) loadCard({ ...found });
+            }}
+          />
+        )}
       </header>
 
+      {view === 'tree' ? (
+        <TechTreeView
+          mode={treeMode}
+          onModeChange={setTreeMode}
+          gameMode={vehicle.gameMode}
+          currentCard={vehicle}
+          myTree={myTree}
+          onChangeMyTree={(t) => {
+            setEditPath(null); // the tree changed shape; stop writing edits into an old slot
+            setMyTree(t);
+          }}
+          onOpenCard={(card, path) => loadCard({ ...card }, path ?? null)}
+        />
+      ) : (
       <main className="flex-1 flex flex-col lg:flex-row min-h-0">
         <aside className="lg:w-[480px] shrink-0 flex flex-col border-r border-[#353e47] bg-[#1e2328] min-h-0">
           <nav className="flex border-b border-[#353e47]">
@@ -138,12 +171,28 @@ export const App: React.FC = () => {
                 {tab.label}
               </button>
             ))}
+            <label
+              className="ml-auto flex items-center gap-1.5 px-3 text-[12px] text-[#8a939b]"
+              title='Tidy numbers when you leave a field, e.g. "130 38 50" → "130 / 38 / 50 mm"'
+            >
+              <input type="checkbox" checked={autoFormat} onChange={(e) => setAutoFormat(e.target.checked)} className="ui-check" />
+              Auto-format
+            </label>
           </nav>
-          <div className="flex-1 overflow-y-auto p-4">
+          <div
+            className="flex-1 overflow-y-auto p-4"
+            onBlur={(e) => {
+              // Auto-format the field you just left ("130 38 50" → "130 / 38 / 50 mm")
+              if (!autoFormat) return;
+              const el = e.target as HTMLInputElement;
+              const formatted = FORMATTERS[el.name as keyof VehicleData]?.(el.value);
+              if (formatted !== undefined && formatted !== el.value) updateVehicle({ [el.name]: formatted });
+            }}
+          >
             {activeTab === 'general' && (
               <GeneralTab vehicle={vehicle} onChange={updateVehicle} onOpenFlagPicker={() => setFlagPickerOpen(true)} />
             )}
-            {activeTab === 'weapons' && <WeaponsTab vehicle={vehicle} onChange={updateVehicle} />}
+            {activeTab === 'weapons' && <WeaponsTab vehicle={vehicle} onChange={updateVehicle} autoFormat={autoFormat} />}
             {activeTab === 'protection' && <ProtectionTab vehicle={vehicle} onChange={updateVehicle} />}
             {activeTab === 'economy' && <EconomyTab vehicle={vehicle} onChange={updateVehicle} />}
             {activeTab === 'visual' && (
@@ -152,7 +201,15 @@ export const App: React.FC = () => {
           </div>
         </aside>
 
-        <section className="flex-1 overflow-auto flex justify-center items-start p-8 bg-[#101316]">
+        <section className="flex-1 overflow-auto flex flex-col items-center gap-3 p-8 bg-[#101316]">
+          {editPath && (
+            <div className="text-[13px] text-[#8a939b]">
+              Editing a card from <span className="text-[#c0c0c0]">{myTree.name}</span>. Changes are saved into the tree.{' '}
+              <button type="button" onClick={() => setView('tree')} className="text-[#9cc6de] hover:underline">
+                Back to tree
+              </button>
+            </div>
+          )}
           {vehicle.cardLayout === 'modern' ? (
             <ModernStatCard
               vehicle={vehicle}
@@ -164,6 +221,22 @@ export const App: React.FC = () => {
           )}
         </section>
       </main>
+      )}
+
+      <LibraryModal
+        isOpen={libraryOpen}
+        initialTab={view === 'tree' ? 'trees' : 'cards'}
+        card={vehicle}
+        tree={myTree}
+        onOpenCard={(v) => loadCard(v)}
+        onOpenTree={(t) => {
+          setEditPath(null);
+          setMyTree(t);
+          setTreeMode('mine');
+          setView('tree');
+        }}
+        onClose={() => setLibraryOpen(false)}
+      />
 
       <FlagPickerModal
         isOpen={flagPickerOpen}
@@ -174,7 +247,7 @@ export const App: React.FC = () => {
       <GameVehiclePicker
         isOpen={gamePickerOpen}
         gameMode={vehicle.gameMode}
-        onSelect={(v) => setVehicle({ ...v, cardLayout: vehicle.cardLayout })}
+        onSelect={(v) => loadCard({ ...v, cardLayout: vehicle.cardLayout })}
         onClose={() => setGamePickerOpen(false)}
       />
     </div>

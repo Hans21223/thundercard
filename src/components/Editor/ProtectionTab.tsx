@@ -17,6 +17,7 @@ export const ProtectionTab: React.FC<ProtectionTabProps> = ({ vehicle, onChange 
             <label className="ui-label">Armor types, one per line</label>
             <textarea
               rows={3}
+              name="protectionSummary"
               value={vehicle.protectionSummary}
               onChange={(e) => onChange({ protectionSummary: e.target.value })}
               placeholder={'Steel armor\nAluminum armor'}
@@ -27,6 +28,7 @@ export const ProtectionTab: React.FC<ProtectionTabProps> = ({ vehicle, onChange 
             <label className="ui-label">Protection class</label>
             <input
               type="text"
+              name="bulletproofRating"
               value={vehicle.bulletproofRating}
               onChange={(e) => onChange({ bulletproofRating: e.target.value })}
               placeholder="Bullet proof"
@@ -45,6 +47,7 @@ export const ProtectionTab: React.FC<ProtectionTabProps> = ({ vehicle, onChange 
           </label>
           <textarea
             rows={2}
+            name="systems"
             value={vehicle.systems}
             onChange={(e) => onChange({ systems: e.target.value })}
             placeholder={'Laser rangefinder, NVD,\nSmoke grenade, Auto tracker'}
@@ -62,6 +65,7 @@ export const ProtectionTab: React.FC<ProtectionTabProps> = ({ vehicle, onChange 
             <label className="ui-label">Crew</label>
             <input
               type="text"
+              name="crew"
               value={vehicle.crew}
               onChange={(e) => onChange({ crew: e.target.value })}
               placeholder="3"
@@ -72,6 +76,7 @@ export const ProtectionTab: React.FC<ProtectionTabProps> = ({ vehicle, onChange 
             <label className="ui-label">Mass</label>
             <input
               type="text"
+              name="mass"
               value={vehicle.mass}
               onChange={(e) => onChange({ mass: e.target.value })}
               placeholder="20.0 t"
@@ -82,6 +87,7 @@ export const ProtectionTab: React.FC<ProtectionTabProps> = ({ vehicle, onChange 
             <label className="ui-label">Visibility</label>
             <input
               type="text"
+              name="visibility"
               value={vehicle.visibility}
               onChange={(e) => onChange({ visibility: e.target.value })}
               placeholder="88 %"
@@ -95,6 +101,7 @@ export const ProtectionTab: React.FC<ProtectionTabProps> = ({ vehicle, onChange 
             <label className="ui-label">Forward, km/h</label>
             <input
               type="text"
+              name="maxSpeedForward"
               value={vehicle.maxSpeedForward}
               onChange={(e) => onChange({ maxSpeedForward: e.target.value })}
               placeholder="83.1"
@@ -105,6 +112,7 @@ export const ProtectionTab: React.FC<ProtectionTabProps> = ({ vehicle, onChange 
             <label className="ui-label">Reverse, km/h</label>
             <input
               type="text"
+              name="maxSpeedReverse"
               value={vehicle.maxSpeedReverse}
               onChange={(e) => onChange({ maxSpeedReverse: e.target.value })}
               placeholder="24.4"
@@ -115,6 +123,7 @@ export const ProtectionTab: React.FC<ProtectionTabProps> = ({ vehicle, onChange 
             <label className="ui-label">Engine power</label>
             <input
               type="text"
+              name="enginePower"
               value={vehicle.enginePower}
               onChange={(e) => onChange({ enginePower: e.target.value })}
               placeholder="575 hp at 3000 rpm"
@@ -124,15 +133,16 @@ export const ProtectionTab: React.FC<ProtectionTabProps> = ({ vehicle, onChange 
         </div>
       </div>
 
-      {/* Legacy Armor & Penetration (For Legacy Card format or reference preservation) */}
+      {/* Only shown on the Simple card */}
       <div className="ui-section">
-        <span className="ui-heading">Legacy card only</span>
+        <span className="ui-heading">Simple card only</span>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
           <div>
             <label className="ui-label">Hull armor</label>
             <input
               type="text"
+              name="hullArmor"
               value={vehicle.hullArmor || ''}
               onChange={(e) => onChange({ hullArmor: e.target.value })}
               placeholder="130 / 38 / 50 mm"
@@ -143,6 +153,7 @@ export const ProtectionTab: React.FC<ProtectionTabProps> = ({ vehicle, onChange 
             <label className="ui-label">Turret armor</label>
             <input
               type="text"
+              name="turretArmor"
               value={vehicle.turretArmor || ''}
               onChange={(e) => onChange({ turretArmor: e.target.value })}
               placeholder="270 / 80 / 58 mm"
@@ -156,6 +167,7 @@ export const ProtectionTab: React.FC<ProtectionTabProps> = ({ vehicle, onChange 
             <label className="ui-label">Penetration</label>
             <input
               type="text"
+              name="armorPenetration"
               value={vehicle.armorPenetration || ''}
               onChange={(e) => onChange({ armorPenetration: e.target.value })}
               placeholder="396 / 394 / 387 mm"
@@ -166,6 +178,7 @@ export const ProtectionTab: React.FC<ProtectionTabProps> = ({ vehicle, onChange 
             <label className="ui-label">At distances</label>
             <input
               type="text"
+              name="atDistances"
               value={vehicle.atDistances || ''}
               onChange={(e) => onChange({ atDistances: e.target.value })}
               placeholder="10 / 100 / 500 m"

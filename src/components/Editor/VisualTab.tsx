@@ -33,7 +33,7 @@ export const VisualTab: React.FC<VisualTabProps> = ({ vehicle, onChange, onOpenF
               onClick={() => onChange({ cardLayout: l })}
               className={`ui-choice ${vehicle.cardLayout === l ? 'is-active' : ''}`}
             >
-              {l === 'modern' ? 'In-game' : 'Legacy (555px)'}
+              {l === 'modern' ? 'In-game' : 'Simple'}
             </button>
           ))}
         </div>
@@ -52,6 +52,7 @@ export const VisualTab: React.FC<VisualTabProps> = ({ vehicle, onChange, onOpenF
             </button>
             <input
               type="text"
+              name="vehicleImage"
               value={vehicle.vehicleImage || ''}
               onChange={(e) => onChange({ vehicleImage: e.target.value })}
               placeholder="Image path or URL"

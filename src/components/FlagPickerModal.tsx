@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { FLAGS } from '../data/flags';
 
 interface FlagPickerModalProps {
@@ -10,6 +10,25 @@ interface FlagPickerModalProps {
 
 export const FlagPickerModal: React.FC<FlagPickerModalProps> = ({ isOpen, selectedFlag, onSelect, onClose }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Shrink to 2× the card's 220×125 flag box so the autosave (localStorage) and JSON stay small.
+  const uploadFlag = async (file?: File) => {
+    if (!file) return;
+    try {
+      const img = await createImageBitmap(file);
+      const scale = Math.min(1, 440 / img.width, 250 / img.height);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      onSelect(canvas.toDataURL('image/png'));
+      onClose();
+    } catch {
+      alert('Could not read that image. Try a PNG or JPG.');
+    }
+    if (fileRef.current) fileRef.current.value = '';
+  };
 
   const filteredFlags = useMemo(() => {
     const q = searchTerm.toLowerCase();
@@ -34,6 +53,16 @@ export const FlagPickerModal: React.FC<FlagPickerModalProps> = ({ isOpen, select
             className="ui-input flex-1"
             autoFocus
           />
+          <input
+            type="file"
+            ref={fileRef}
+            accept="image/*"
+            onChange={(e) => uploadFlag(e.target.files?.[0])}
+            className="hidden"
+          />
+          <button type="button" onClick={() => fileRef.current?.click()} className="ui-btn" title="Use your own flag image">
+            Upload…
+          </button>
           <button type="button" onClick={onClose} className="ui-btn">
             Close
           </button>

@@ -22,6 +22,14 @@ ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X']
 # ponytail: stock-crew multiplier calibrated from one in-game capture (HSTV-L); use crew_skills.blk if other tanks drift
 STOCK_CREW_TURRET = 0.7
 STOCK_CREW_RELOAD = 1.3
+# Protection row, same order as gui scripts/unit/unitProtection.nut
+ARMOR_TYPES = ['hasNoArmor', 'hasSteelArmor', 'hasSpallLiner', 'hasNBCLiner', 'hasCompositeArmor', 'hasAluminiumArmor',
+               'hasArtilleryProtection', 'hasReinforcedHullProtection', 'hasLocalHullProtection', 'hasCitadel',
+               'hasAntiTorpedoProtection', 'hasLocalSideProtection', 'hasFullSideProtection',
+               'hasReinforcedInternalProtection', 'hasLocalInternalProtection']
+PROTECTION_BY_CLASS = {'type_light_tank': 'bullet_proof_lite', 'type_medium_tank': 'projectile_proof_medium',
+                       'type_heavy_tank': 'projectile_proof_heavy', 'type_missile_tank': 'splinter_proof_rocket',
+                       'type_tank_destroyer': 'projectile_proof_sau', 'type_spaa': 'bullet_proof_lite'}
 
 
 def load(path):
@@ -84,11 +92,105 @@ def ammo_names(wblk, tank_mods, L):
     return names
 
 
+def blk_file(path):
+    p = os.path.join(ACES, (path or '').lower())
+    return load(p) if path and os.path.exists(p) else {}
+
+
+def protection(t, tg, statcard, L):
+    """(armor lines, protection class lines) — port of gui scripts/unit/unitProtection.nut."""
+    armor = [L[f'info/material/{a}'.lower()] for a in ARMOR_TYPES if a in statcard]
+    armor += [L.get(f'armor_class/{e}'.lower(), e) for e in as_list(statcard.get('eraType'))]
+    tag_set = tg.get('tags', {})
+    level = (tg.get('Shop') or {}).get('mainArmorProtectionLevel') or next(
+        (v for k, v in PROTECTION_BY_CLASS.items() if tag_set.get(k)), None)
+    rating = [L.get(f'info/material/{level}'.lower(), level)] if level else []
+    aps = (t.get('ActiveProtectionSystem') or {}).get('model')
+    if tag_set.get('has_aps') and aps:
+        rating.append(L['info/apsname'].replace('{name}', L.get(f'aps/{aps}'.lower(), aps)))
+    return '\n'.join(armor), '\n'.join(rating)
+
+
+def systems(u, t, mods_db, L):
+    """'Laser rangefinder, NVD, …' — port of gui scripts/unit/unitSystems.nut (ground vehicles)."""
+    items, seen = [], set()
+
+    def add_mod(key, loc_key=None):
+        if key not in seen:
+            seen.add(key)
+            items.append([L.get(f'modification/{loc_key or key}'.lower(), loc_key or key), 1])
+
+    tank_mods = t.get('modifications') or {}
+    for m in u.get('modifications') or tank_mods:
+        eff = (mods_db.get(m) or {}).get('effects') or {}
+        lws = any(blk_file(x.get('blk')).get('type') == 'lws' for x in as_list((eff.get('sensors') or {}).get('sensor')))
+        if lws or eff.get('smokeScreenCount', 0) > 0 or any(
+                eff.get(e) is True for e in ('enableNightVision', 'diggingAvailable', 'rangefinderMounted')):
+            add_mod(m)
+
+    weapons = as_list((t.get('commonWeapons') or {}).get('Weapon'))
+    for m in tank_mods.values():
+        weapons += as_list((((m or {}).get('effects') or {}).get('commonWeapons') or {}).get('Weapon'))
+    if any(isinstance(w, dict) and w.get('triggerGroup') == 'smoke' for w in weapons):
+        add_mod('smoke_grenade', 'tank_smoke_screen_system_mod')
+
+    antennas = {}  # the game counts antennas per sensor file: "2x Search radar antenna"
+    for sensor in as_list((t.get('sensors') or {}).get('sensor')):
+        blk = blk_file(sensor.get('blk'))
+        if blk.get('type') == 'radar' and blk.get('name') == 'Auto tracker':
+            items.append([L['info/att'], 1])
+        for part in as_list(sensor.get('dmPart')):
+            kind = next((k for k in ('antenna_target_location', 'antenna_target_tagging') if k in part), None)
+            if kind and sensor['blk'] in antennas:
+                antennas[sensor['blk']][1] += 1
+            elif kind:
+                antennas[sensor['blk']] = [L[f'armor_class/{kind}'], 1]
+                items.append(antennas[sensor['blk']])
+    return ', '.join(name if n == 1 else f'{n}x {name}' for name, n in items)
+
+
+def shop_kind(entry, u):
+    """How the game's tree shows a vehicle: squadron (green), event/marketplace (blue, Ⓖ), pack, premium (GE price)."""
+    if entry.get('isClanVehicle'):
+        return 'squadron'
+    if entry.get('event') or entry.get('marketplaceItemdefId'):
+        return 'event'
+    if entry.get('gift'):
+        return 'pack'
+    return 'premium' if u.get('costGold') else 'standard'
+
+
+def tech_trees(shop, have, wp, L):
+    """Ground research trees from shop.blk → ({country: columns}, {vehicle id: shop kind}).
+    column = [{ids, link, name?}]; more than one id = a folder (name from shop/group/<key>).
+    link: researched from the entry above it (reqAir "" breaks the chain, as in premium columns)."""
+    trees, kinds = {}, {}
+    for country, branches in shop.items():
+        cols = []
+        for col in as_list(((branches or {}).get('army') or {}).get('range')):
+            entries = []
+            for key, v in col.items():
+                members = {k: sub for k, sub in v.items() if isinstance(sub, dict)} or {key: v}
+                ids = [m for m in members if m in have]
+                for m in ids:
+                    kinds[m] = shop_kind(members[m], wp[m])
+                if ids:
+                    entry = {'ids': ids, 'link': bool(entries) and v.get('reqAir') != ''}
+                    if len(ids) > 1:
+                        entry['name'] = L.get(f'shop/group/{key}'.lower(), '/'.join(have[i]['short'] for i in ids))
+                    entries.append(entry)
+            if entries:
+                cols.append(entries)
+        trees[country] = cols
+    return trees, kinds
+
+
 def build():
     wp, tags = load(os.path.join(CHAR, 'wpcost.blk')), load(os.path.join(CHAR, 'unittags.blk'))
     mods_db = load(os.path.join(CHAR, 'modifications.blk'))['modifications']
     free_repairs = str(load(os.path.join(CHAR, 'warpoints.blk')).get('freeRepairs', ''))
-    L = lang('units.csv', 'units_weaponry.csv', 'menu.csv', 'menu_options.csv')
+    statcards = load(os.path.join(ACES, 'config/statcard_info.blk'))
+    L = lang(*sorted(f for f in os.listdir(LANG) if f.endswith('.csv')))
     max_rank = max(u.get('rank', 0) for u in wp.values() if isinstance(u, dict))
 
     out = []
@@ -150,6 +252,8 @@ def build():
         req = u.get('reqAir')
         ace_h, ace_v = yaw * pen['mulSpeedYaw'], pitch * pen['mulSpeedPitch']
         drone = t.get('supportPlane') or {}
+        armor, armor_class = protection(t, tg, statcards.get(uid) or {}, L)
+        shop = tg.get('Shop') or {}
 
         card = {
             'id': uid,
@@ -172,6 +276,12 @@ def build():
             'uavName': f"{L['mainmenu/type_drone']} {L.get(drone.get('supportPlaneClass', '').lower() + '_shop', '')}"
                        if drone else '',
             'uavRecon': f"{drone.get('count', 1)}{L['measureunits/pcs']}" if drone else '',
+            'protectionSummary': armor,
+            'bulletproofRating': armor_class,
+            **{f'{part}Armor': ' / '.join(f'{x:g}' for x in thick) + ' mm'  # Simple card: front / side / rear
+               for part, thick in (('hull', shop.get('armorThicknessHull')), ('turret', shop.get('armorThicknessTurret')))
+               if thick},
+            'systems': systems(u, t, mods_db, L),
             'ammoTypes': ammo,
             'ammoCaliber': cal,
             'crew': u.get('crewTotalCount', ''),
@@ -204,7 +314,11 @@ def build():
         out.append({'short': L.get(uid.lower() + '_shop', uid), 'country': u['country'], 'card': card, 'modes': modes})
 
     out.sort(key=lambda v: (v['country'], v['modes']['realistic']['battleRating'], v['short']))
-    return out
+    by_id = {v['card']['id']: v for v in out}
+    trees, kinds = tech_trees(load(os.path.join(CHAR, 'shop.blk')), by_id, wp, L)
+    for uid, kind in kinds.items():
+        by_id[uid]['card']['statusType'] = kind
+    return out, trees
 
 
 def version():
@@ -217,8 +331,12 @@ def version():
 
 
 if __name__ == '__main__':
-    vehicles = build()
+    vehicles, trees = build()
     by_id = {v['card']['id']: v for v in vehicles}
+    us = trees['country_usa']
+    assert us[0][0] == {'ids': ['us_m2a4'], 'link': False} and us[0][-1]['ids'] == ['us_hstv_l'], us[0][:2]
+    assert {'ids': ['us_m4a1_1942_sherman', 'us_m4_sherman', 'us_m4a2_sherman'], 'link': True,
+            'name': 'M4A1/M4/M4A2'} in us[1], us[1][:3]
 
     # Check against the in-game HSTV-L capture (public/assets/sample/hstvl_statcard_reference.png)
     h = {**by_id['us_hstv_l']['card'], **by_id['us_hstv_l']['modes']['realistic']}
@@ -229,16 +347,24 @@ if __name__ == '__main__':
               'repairCostPerMin': '976', 'maxRepairCost': '3,550', 'freeRepairTime': '14d 06h 21m',
               'rpMultiplier': '2.44×(100%)', 'ammoTypes': ['XM885', 'XM884'], 'crew': 3,
               'efficientProgressFrom': 'M10 Booker', 'researchEfficiencyRanks': 'VI – VIII Ranks',
-              'uavName': 'UAV Recon Micro', 'uavRecon': '1pcs'}
+              'uavName': 'UAV Recon Micro', 'uavRecon': '1pcs', 'protectionSummary': 'Aluminum armor',
+              'bulletproofRating': 'Bullet proof', 'systems': 'Laser rangefinder, NVD, Smoke grenade, Auto tracker'}
     bad = {k: (h.get(k), v) for k, v in expect.items() if h.get(k) != v}
     assert not bad, f'HSTV-L mismatch (got, expected): {bad}'
     assert h['primaryWeapon'] == {'id': 'pw1', 'name': '75 mm ADMAG cannon', 'ammo': 26}, h['primaryWeapon']
     assert h['secondaryWeapons'] == [{'id': 'sw1', 'name': '7.62 mm M240 machine gun', 'ammo': 3200, 'count': 2, 'prefix': '2x'}], \
         h['secondaryWeapons']
 
+    # Other in-game captures (XM975, M163)
+    for uid, want in {'us_xm_975_roland': ('Steel armor\nAluminum armor', 'Bullet proof',
+                                           'Search radar antenna, Tracking radar director'),
+                      'us_m163_vulcan': ('Aluminum armor', 'Bullet proof', 'Tracking radar director')}.items():
+        c = by_id[uid]['card']
+        got = (c['protectionSummary'], c['bulletproofRating'], c['systems'])
+        assert got == want, f'{uid}: got {got}, expected {want}'
     assert duration(15 * 24 + 21 / 60) == '15d 21m' and duration(18 + 57 / 60) == '18h 57m', 'duration format'
 
     dest = os.path.join(PUB, 'assets/game/vehicles.json')
     with open(dest, 'w', encoding='utf-8') as f:
-        json.dump({'version': version(), 'vehicles': vehicles}, f, ensure_ascii=False, separators=(',', ':'))
+        json.dump({'version': version(), 'vehicles': vehicles, 'trees': trees}, f, ensure_ascii=False, separators=(',', ':'))
     print(f'{len(vehicles)} vehicles -> {dest} ({os.path.getsize(dest) // 1024} KB)')

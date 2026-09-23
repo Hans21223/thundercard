@@ -42,16 +42,37 @@ export function loadVehicleFromStorage(): VehicleData | null {
   }
 }
 
-export function downloadVehicleJson(vehicle: VehicleData): void {
-  const jsonStr = JSON.stringify(vehicle, null, 2);
-  const blob = new Blob([jsonStr], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
+export function loadJson<T>(key: string): T | null {
+  try {
+    const data = localStorage.getItem(key);
+    return data ? (JSON.parse(data) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveJson(key: string, value: unknown): boolean {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (e) {
+    console.error(`Failed to save ${key} to localStorage:`, e);
+    return false;
+  }
+}
+
+export function downloadJson(value: unknown, filename: string): void {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }));
   const link = document.createElement('a');
-  const safeName = (vehicle.name || 'custom_vehicle').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
-  link.download = `${safeName}_statcard.json`;
+  link.download = filename;
   link.href = url;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+export function downloadVehicleJson(vehicle: VehicleData): void {
+  const safeName = (vehicle.name || 'custom_vehicle').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+  downloadJson(vehicle, `${safeName}_statcard.json`);
 }
 
 export function parseVehicleJson(file: File): Promise<VehicleData> {

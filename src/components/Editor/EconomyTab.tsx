@@ -41,6 +41,7 @@ export const EconomyTab: React.FC<EconomyTabProps> = ({ vehicle, onChange }) => 
             <label className="ui-label">Required RP</label>
             <input
               type="text"
+              name="requiredRP"
               value={vehicle.requiredRP}
               onChange={(e) => onChange({ requiredRP: e.target.value })}
               placeholder="350,000"
@@ -51,6 +52,7 @@ export const EconomyTab: React.FC<EconomyTabProps> = ({ vehicle, onChange }) => 
             <label className="ui-label">Efficient progress from</label>
             <input
               type="text"
+              name="efficientProgressFrom"
               value={vehicle.efficientProgressFrom}
               onChange={(e) => onChange({ efficientProgressFrom: e.target.value })}
               placeholder="M10 Booker"
@@ -61,6 +63,7 @@ export const EconomyTab: React.FC<EconomyTabProps> = ({ vehicle, onChange }) => 
             <label className="ui-label">Bonus</label>
             <input
               type="text"
+              name="efficientProgressBonus"
               value={vehicle.efficientProgressBonus}
               onChange={(e) => onChange({ efficientProgressBonus: e.target.value })}
               placeholder="110%"
@@ -75,6 +78,7 @@ export const EconomyTab: React.FC<EconomyTabProps> = ({ vehicle, onChange }) => 
           </label>
           <input
             type="text"
+            name="researchEfficiencyRanks"
             value={vehicle.researchEfficiencyRanks}
             onChange={(e) => onChange({ researchEfficiencyRanks: e.target.value })}
             placeholder="VI – VIII Ranks"
@@ -93,12 +97,14 @@ export const EconomyTab: React.FC<EconomyTabProps> = ({ vehicle, onChange }) => 
             <div className="flex gap-2">
               <input
                 type="text"
+                name="price"
                 value={vehicle.price}
                 onChange={(e) => onChange({ price: e.target.value })}
                 placeholder="950,000"
                 className="ui-input flex-1"
               />
               <select
+                name="priceCurrency"
                 value={vehicle.priceCurrency}
                 onChange={(e) => onChange({ priceCurrency: e.target.value as 'sl' | 'ge' })}
                 className="ui-input w-24"
@@ -122,6 +128,7 @@ export const EconomyTab: React.FC<EconomyTabProps> = ({ vehicle, onChange }) => 
             <label className="ui-label">Crew train cost</label>
             <input
               type="text"
+              name="crewTrainCost"
               value={vehicle.crewTrainCost}
               onChange={(e) => onChange({ crewTrainCost: e.target.value })}
               placeholder="270,000"
@@ -135,6 +142,7 @@ export const EconomyTab: React.FC<EconomyTabProps> = ({ vehicle, onChange }) => 
             <label className="ui-label">Free repairs</label>
             <input
               type="text"
+              name="freeRepairs"
               value={vehicle.freeRepairs}
               onChange={(e) => onChange({ freeRepairs: e.target.value })}
               placeholder="10"
@@ -145,6 +153,7 @@ export const EconomyTab: React.FC<EconomyTabProps> = ({ vehicle, onChange }) => 
             <label className="ui-label">Repair, SL/min</label>
             <input
               type="text"
+              name="repairCostPerMin"
               value={vehicle.repairCostPerMin}
               onChange={(e) => onChange({ repairCostPerMin: e.target.value })}
               placeholder="976"
@@ -155,6 +164,7 @@ export const EconomyTab: React.FC<EconomyTabProps> = ({ vehicle, onChange }) => 
             <label className="ui-label">Max repair cost</label>
             <input
               type="text"
+              name="maxRepairCost"
               value={vehicle.maxRepairCost}
               onChange={(e) => onChange({ maxRepairCost: e.target.value })}
               placeholder="3,550"
@@ -165,6 +175,7 @@ export const EconomyTab: React.FC<EconomyTabProps> = ({ vehicle, onChange }) => 
             <label className="ui-label">Free repair time</label>
             <input
               type="text"
+              name="freeRepairTime"
               value={vehicle.freeRepairTime}
               onChange={(e) => onChange({ freeRepairTime: e.target.value })}
               placeholder="14d 06h 21m"
@@ -186,6 +197,7 @@ export const EconomyTab: React.FC<EconomyTabProps> = ({ vehicle, onChange }) => 
                 <label className="ui-label">Percentage</label>
                 <input
                   type="text"
+                  name="rpRewardPercent"
                   value={vehicle.rpRewardPercent}
                   onChange={(e) => onChange({ rpRewardPercent: e.target.value })}
                   placeholder="244%"
@@ -196,6 +208,7 @@ export const EconomyTab: React.FC<EconomyTabProps> = ({ vehicle, onChange }) => 
                 <label className="ui-label">Multiplier</label>
                 <input
                   type="text"
+                  name="rpMultiplier"
                   value={vehicle.rpMultiplier}
                   onChange={(e) => onChange({ rpMultiplier: e.target.value })}
                   placeholder="2.44×(100%)"
@@ -212,6 +225,7 @@ export const EconomyTab: React.FC<EconomyTabProps> = ({ vehicle, onChange }) => 
                 <label className="ui-label">Percentage</label>
                 <input
                   type="text"
+                  name="slRewardPercent"
                   value={vehicle.slRewardPercent}
                   onChange={(e) => onChange({ slRewardPercent: e.target.value })}
                   placeholder="160%"
@@ -222,6 +236,7 @@ export const EconomyTab: React.FC<EconomyTabProps> = ({ vehicle, onChange }) => 
                 <label className="ui-label">Multiplier</label>
                 <input
                   type="text"
+                  name="slMultiplier"
                   value={vehicle.slMultiplier}
                   onChange={(e) => onChange({ slMultiplier: e.target.value })}
                   placeholder="1.6×(100%)"

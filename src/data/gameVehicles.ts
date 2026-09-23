@@ -8,9 +8,17 @@ export interface GameVehicle {
   modes: Record<GameMode, Partial<VehicleData>>;
 }
 
+// Research tree column entry; more than one id = a folder. link: researched from the entry above.
+export interface TreeEntry {
+  ids: string[];
+  link: boolean;
+  name?: string; // folder name
+}
+
 export interface GameCatalog {
   version: string;
   vehicles: GameVehicle[];
+  trees: Record<string, TreeEntry[][]>; // country → columns, left to right
 }
 
 let catalog: Promise<GameCatalog> | null = null;
@@ -39,6 +47,7 @@ export function gameToVehicle(g: GameVehicle, mode: GameMode, version: string): 
     systems: '',
     visibility: '',
     gameMode: mode,
+    shortName: g.short,
     ...g.card,
     ...g.modes[mode],
   } as VehicleData;

@@ -4,9 +4,10 @@ import { VehicleData, WeaponEntry } from '../../types/vehicle';
 interface WeaponsTabProps {
   vehicle: VehicleData;
   onChange: (updates: Partial<VehicleData>) => void;
+  autoFormat: boolean;
 }
 
-export const WeaponsTab: React.FC<WeaponsTabProps> = ({ vehicle, onChange }) => {
+export const WeaponsTab: React.FC<WeaponsTabProps> = ({ vehicle, onChange, autoFormat }) => {
   const secondaries = vehicle.secondaryWeapons || [];
   const updateSecondary = (id: string, updates: Partial<WeaponEntry>) =>
     onChange({ secondaryWeapons: secondaries.map((w) => (w.id === id ? { ...w, ...updates } : w)) });
@@ -16,6 +17,7 @@ export const WeaponsTab: React.FC<WeaponsTabProps> = ({ vehicle, onChange }) => 
       <label className="ui-label">{label}</label>
       <input
         type="text"
+        name={key}
         value={(vehicle[key] as string) || ''}
         onChange={(e) => onChange({ [key]: e.target.value })}
         placeholder={placeholder}
@@ -33,6 +35,7 @@ export const WeaponsTab: React.FC<WeaponsTabProps> = ({ vehicle, onChange }) => 
             <label className="ui-label">Name</label>
             <input
               type="text"
+              name="primaryWeapon"
               value={vehicle.primaryWeapon?.name || ''}
               onChange={(e) => onChange({ primaryWeapon: { ...vehicle.primaryWeapon, name: e.target.value } })}
               placeholder="75 mm ADMAG cannon"
@@ -43,6 +46,7 @@ export const WeaponsTab: React.FC<WeaponsTabProps> = ({ vehicle, onChange }) => 
             <label className="ui-label">Ammo</label>
             <input
               type="text"
+              name="primaryWeapon"
               value={vehicle.primaryWeapon?.ammo ?? ''}
               onChange={(e) => onChange({ primaryWeapon: { ...vehicle.primaryWeapon, ammo: e.target.value } })}
               placeholder="26"
@@ -77,6 +81,7 @@ export const WeaponsTab: React.FC<WeaponsTabProps> = ({ vehicle, onChange }) => 
                   type="text"
                   value={sec.prefix || ''}
                   onChange={(e) => updateSecondary(sec.id, { prefix: e.target.value })}
+                  onBlur={(e) => autoFormat && /^\d+$/.test(e.target.value.trim()) && updateSecondary(sec.id, { prefix: `${e.target.value.trim()}x` })}
                   placeholder="2x"
                   className="ui-input"
                 />
