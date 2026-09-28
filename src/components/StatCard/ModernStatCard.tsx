@@ -50,14 +50,14 @@ const Group: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   React.Children.toArray(children).length ? <div className="mt-[6px]">{children}</div> : null;
 
 const ViewButton: React.FC<{ icon: string; text: string; onClick?: () => void }> = ({ icon, text, onClick }) => (
-  <div className="flex items-center gap-[6px] mt-[3px] mb-[5px] text-[12px] leading-[17px]">
-    <span className={`${DIM} text-[11px]`}>go to viewing</span>
+  <div className="flex flex-wrap items-center gap-x-[6px] mt-[3px] mb-[5px] text-[12px] leading-[17px]">
+    <span className={`${DIM} whitespace-nowrap text-[11px]`}>go to viewing</span>
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-[5px] h-[18px] px-[3px] bg-[#0c1118] border border-[#3a474f] text-[#9a9a9a] hover:text-white"
+      className="flex shrink-0 items-center gap-[5px] whitespace-nowrap h-[18px] px-[3px] bg-[#0c1118] border border-[#3a474f] text-[#9a9a9a] hover:text-white"
     >
-      <img src={icon} alt="" className="w-3.5 h-3.5 object-contain" />
+      <img src={icon} alt="" className="w-3.5 h-3.5 shrink-0 object-contain" />
       {text}
     </button>
   </div>
